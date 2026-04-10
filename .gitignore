@@ -1,0 +1,28 @@
+# data
+data/*
+*.jpg
+*.png
+*.bmp
+*.zip
+*.pdf
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+
+# jupyter
+.ipynb_checkpoints/
+
+# editors
+.vscode/
+
+# model checkpoints
+*.pt
+*.pt2
+*.ckpt
+*.pkl
+
+# macos
+**/.DS_Store
+**/._*
