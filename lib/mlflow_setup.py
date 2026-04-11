@@ -1,4 +1,5 @@
 import warnings
+import optuna
 import torch
 import mlflow
 import psycopg2
@@ -68,7 +69,7 @@ class Experiment():
         load_dotenv()
         self.srv = ServerConnection(experiment_name)
         self.srv.connect()
-        self.study = None
+        self.study: optuna.study.Study = None
 
     def set_study(self, study):
         self.study = study

@@ -2,11 +2,7 @@
 
 import matplotlib.pyplot as plt
 import optuna
-import torch
-import torch.nn as nn
 import mlflow
-import mlflow.pytorch
-import optuna
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
@@ -40,20 +36,32 @@ def stop_on_threshold(study, trial):
     if study.best_value <= MSE_THRESHOLD:
         study.stop()
 
-
-# CORE: this will run the experiment
-# It will sync with other runners as well as continue from an interrupted run
-# If the objective is already met (MAX_TRIALS or other callbacks)
 n_finished = sum(1 for t in exp.study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED))
+try:
+    threshold_met = exp.study.best_value <= MSE_THRESHOLD
+except ValueError:
+    threshold_met = False
 print(f"Study '{STUDY_NAME}' has {n_finished}/{MAX_TRIALS} finished trials.")
 
-with mlflow.start_run(run_name=STUDY_NAME) as parent_run:
-    mlflow.set_tag("optuna_study", STUDY_NAME)
+# Persist the parent run across restarts so all trials group under the same run
+parent_run_id = exp.study.user_attrs.get("mlflow_parent_run_id")
+if parent_run_id:
+    parent_run_ctx = mlflow.start_run(run_id=parent_run_id)
+else:
+    parent_run_ctx = mlflow.start_run(run_name=STUDY_NAME)
 
-    if n_finished < MAX_TRIALS:
+with parent_run_ctx as parent_run:
+    if not parent_run_id:
+        exp.study.set_user_attr("mlflow_parent_run_id", parent_run.info.run_id)
+        mlflow.set_tag("optuna_study", STUDY_NAME)
+
+    if n_finished < MAX_TRIALS and not threshold_met:
+        # CORE: this will run the experiment
+        # It will sync with other runners as well as continue from an interrupted run
+        # If the objective is already met (MAX_TRIALS or other callbacks)
         exp.study.optimize(
             lambda trial: objective(exp, trial),
-            n_trials=None,
+            n_trials=MAX_TRIALS * 2,  # safeguard; MaxTrialsCallback is the real stop condition
             callbacks=[
                 MaxTrialsCallback(MAX_TRIALS, states=(TrialState.COMPLETE, TrialState.PRUNED)),
                 stop_on_threshold,
@@ -71,7 +79,6 @@ with mlflow.start_run(run_name=STUDY_NAME) as parent_run:
     mlflow.set_tag("best_trial_number", best_trial.number)
     mlflow.set_tag("best_trial_run_id", best_run_id)
 
-    # Register the best model from the existing trial run in Model Registry
     model_version = mlflow.register_model(
         model_uri=f"runs:/{best_run_id}/best_model",
         name=STUDY_NAME,
