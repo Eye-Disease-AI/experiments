@@ -12,7 +12,7 @@ class RNG():
     def is_deterministic(self):
         return self.seed is not None
     
-    def enable_determinism(self, seed):
+    def set_seed(self, seed):
         self.seed = seed
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)

@@ -134,8 +134,9 @@ class MyDataModule(L.LightningDataModule):
         self.image_channels = 3
         self.input_size = self.image_size * self.image_size * self.image_channels
         self.return_paths = return_paths
-
-    def setup(self, stage: str = None):
+        self.rng = rng
+    
+    def prepare_data(self):
         max_angle = 15
         max_rad = math.radians(max_angle)
         pre_rot_size = int(math.ceil(self.image_size * (math.sin(max_rad) + math.cos(max_rad))))
@@ -152,14 +153,14 @@ class MyDataModule(L.LightningDataModule):
             transformsv2.ConvertImageDtype(),
         ])
         self.dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset = "trainvalSet")
+
+    def setup(self, stage: str = None):
         self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet")
         self.train_set, self.val_set, self.test_set = self.split_dataset(self.dataset)
-        self.test_set, _ = self.split_dataset(self.test_dataset, 1.0)
         self.test_set = SubsetTransformer(self.test_set, transform=self.val_transform)
         self.train_set = SubsetTransformer(self.train_set, transform=self.transform)
         self.val_set = SubsetTransformer(self.val_set, transform=self.val_transform)
         self.test_set = SubsetTransformer(self.test_set, transform=self.val_transform)
-    
         # TODO: Check if we are on Linux and then set num_workers properly
         
         # macos fix for breaking when num_workers > 0
@@ -171,7 +172,7 @@ class MyDataModule(L.LightningDataModule):
         
         # BATCH_SIZE can be changed here
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=32, num_workers=16
+            dataset, batch_size=32, num_workers=num_workers, pin_memory=True
         )
     
     def split_dataset(self, dataset: MyDataset, train_ratio=8/9, val_ratio=1/9): # test is already 1/10
@@ -186,6 +187,7 @@ class MyDataModule(L.LightningDataModule):
 
         train_pkgs = packages[:train_n]
         val_pkgs = packages[train_n:train_n + val_n]
+        test_pkgs = packages[train_n + val_n: len(packages)]
 
 
         def pkgs_to_indices(pkgs):
@@ -197,10 +199,12 @@ class MyDataModule(L.LightningDataModule):
 
         train_idx = pkgs_to_indices(train_pkgs)
         val_idx   = pkgs_to_indices(val_pkgs)
+        test_idx   = pkgs_to_indices(test_pkgs)
 
         return (
             torch.utils.data.Subset(dataset, train_idx),
             torch.utils.data.Subset(dataset, val_idx),
+            torch.utils.data.Subset(dataset, test_idx),
         )
 
     def train_dataloader(self):
