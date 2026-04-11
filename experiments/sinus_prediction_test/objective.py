@@ -69,8 +69,6 @@ def objective(exp: Experiment, trial: optuna.trial.Trial):
         ax.set_title(f"trial-{trial.number}  lr={lr:.2e}")
         mlflow.log_figure(fig, "prediction.png")
         plt.close(fig)
-
-        exp.srv.save_model(model)
         trial.set_user_attr("mlflow_run_id", run.info.run_id)
 
     return mse

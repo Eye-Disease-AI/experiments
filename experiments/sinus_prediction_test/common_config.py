@@ -3,10 +3,10 @@ import torch.nn as nn
 
 SEED = 2137
 EXPERIMENT_NAME = "sinsus-prediction-test"
-STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search2" # Multiple studies can be run per experiment, eg. optimizing different things
+STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search8" # Multiple studies can be run per experiment, eg. optimizing different things
 
-EPOCHS = 300
-MAX_TRIALS = 20
+EPOCHS = 100
+MAX_TRIALS = 5
 MSE_THRESHOLD = 0.0001
 LOG_EVERY_N_EPOCHS = 100 # API calls are expensive, so its better to batch them
 OPTIMIZER= torch.optim.Adam
