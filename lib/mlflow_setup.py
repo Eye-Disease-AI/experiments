@@ -33,7 +33,7 @@ class Experiment():
         self.DB_PASSWORD = os.environ["POSTGRES_PASSWORD"]
         self.DB_NAME = os.environ["POSTGRES_DB"]
         self.OPTUNA_DB_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/optuna"
-        self.MLFLOW_URI = "http://localhost:5000"
+        self.MLFLOW_URI = f'http://{os.environ.get("MLFLOW_IP", "localhost")}:{os.environ.get("MLFLOW_PORT", "5000")}'
         self.experiment_name = self.experiment_name
         self.client = None
         self.storage = None
