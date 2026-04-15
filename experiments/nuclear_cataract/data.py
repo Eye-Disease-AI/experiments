@@ -14,7 +14,6 @@ import math
 import json
 import random
 
-
 data_path = "data"
 if not os.path.exists(data_path):
     os.mkdir(data_path)
@@ -158,10 +157,10 @@ class MyDataModule(L.LightningDataModule):
             self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet")
 
         if not hasattr(self, 'train_set'):
-            train, val, test = self.split_dataset(self.dataset)
+            train, val = self.split_dataset(self.dataset)
             self.train_set = SubsetTransformer(train, transform=self.transform)
             self.val_set   = SubsetTransformer(val,   transform=self.val_transform)
-            self.test_set  = SubsetTransformer(test,  transform=self.val_transform)
+            self.test_set   = SubsetTransformer(self.test_dataset,   transform=self.val_transform)
 
         num_workers = 0 if torch.mps.is_available() else cpu_count() - 1
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
@@ -175,11 +174,9 @@ class MyDataModule(L.LightningDataModule):
 
         total = len(packages)
         train_n = int(train_ratio * total)
-        val_n = int(val_ratio * total)
 
         train_pkgs = packages[:train_n]
-        val_pkgs   = packages[train_n:train_n + val_n]
-        test_pkgs  = packages[train_n + val_n:]
+        val_pkgs   = packages[train_n:]
 
         def pkgs_to_indices(pkgs):
             return [
@@ -190,8 +187,7 @@ class MyDataModule(L.LightningDataModule):
 
         return (
             torch.utils.data.Subset(dataset, pkgs_to_indices(train_pkgs)),
-            torch.utils.data.Subset(dataset, pkgs_to_indices(val_pkgs)),
-            torch.utils.data.Subset(dataset, pkgs_to_indices(test_pkgs)),
+            torch.utils.data.Subset(dataset, pkgs_to_indices(val_pkgs))
         )
 
     def train_dataloader(self):
@@ -203,34 +199,39 @@ class MyDataModule(L.LightningDataModule):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    datamodule = MyDataModule(True)
+    rng = RNG()
+    rng.set_seed(2137)
+
+    datamodule = MyDataModule(rng, True)
     datamodule.prepare_data()
     datamodule.setup()
 
     loader = datamodule.val_dataloader()
-    for img, label, *path in loader:
-        plt.imshow(img[0].permute(1,2,0))
-        plt.show()
+    fig, ax = plt.subplots(3,3)
+    loader_iter = iter(loader)
+    img, label, *path = next(loader_iter)
+
+    for i, ax in enumerate(ax.flat):
+        ax.imshow(img[i].permute(1,2,0))
+        ax.axis('off')
         
         # Take just first element, because we also take first image from the batch
-        print(label[0])
+        print(label[i])
         
         # Path is optional so we need to check
         # * means that it will be an array, if present it will have one element
         # is absent it won't have any elements
         if len(path) != 0:
-            print(path[0][0])
+            print(path[0][i])
             print([i["id"] for i in datamodule.dataset.raw_annotations if str(i["image"]).split('/')[-1] == path[0][0]])
-        break
-
-    for i in range(10):
-        print(datamodule.train_set[i][1])
+    plt.tight_layout()
+    plt.show()
 
     print("Positive cases:")
     def print_ratio(name, set):
         p = sum([d[1] for d in set])
         l = len(set)
-        print(f"{name}: {p}/{l}={p/l}")
+        print(f"{name}: {p}/{l}={p/l*100:.4}%")
     print_ratio("train", datamodule.train_set)
     print_ratio("val", datamodule.val_set)
-    #print_ratio("test", datamodule.test_set)
+    print_ratio("test", datamodule.test_set)
