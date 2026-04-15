@@ -7,8 +7,24 @@ import os
 from dotenv import load_dotenv
 from optuna.storages import RDBStorage
 
-class ServerConnection():
+class Experiment():
     def __init__(self, experiment_name):
+        self.experiment_name = experiment_name
+        self.study: optuna.study.Study = None
+
+        load_dotenv()
+        self.init_server_data()
+
+        try:
+            print(f"Connecting to MLFLOW server {self.MLFLOW_URI}")
+            self.connect()
+        except Exception as e:
+            print(f"Failed to conect to the MLFLow server {self.MLFLOW_URI}")
+            print(e)
+            exit(1)
+        print("Connection OK")
+
+    def init_server_data(self):
         self.MLFLOW_TRACKING_USERNAME = os.environ["MLFLOW_TRACKING_USERNAME"] = os.environ["MLFLOW_ADMIN_USERNAME"]
         self.MLFLOW_TRACKING_PASSWORD =  os.environ["MLFLOW_TRACKING_PASSWORD"] = os.environ["MLFLOW_ADMIN_PASSWORD"]
         self.DB_HOST = os.environ.get("POSTGRES_HOST", "localhost")
@@ -18,7 +34,7 @@ class ServerConnection():
         self.DB_NAME = os.environ["POSTGRES_DB"]
         self.OPTUNA_DB_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/optuna"
         self.MLFLOW_URI = "http://localhost:5000"
-        self.experiment_name = experiment_name
+        self.experiment_name = self.experiment_name
         self.client = None
         self.storage = None
 
@@ -37,19 +53,6 @@ class ServerConnection():
                 cur.execute("CREATE DATABASE optuna")
                 print("Created database 'optuna'.")
         conn.close()
-
-
-class Experiment():
-    def __init__(self, experiment_name):
-        load_dotenv()
-        self.srv = ServerConnection(experiment_name)
-        self.srv.connect()
-        self.study: optuna.study.Study = None
-
-    def set_study(self, study):
-        self.study = study
-
-
 
 def save_model(model, example_input=None):
     print("saving model")

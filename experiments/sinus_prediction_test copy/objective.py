@@ -29,7 +29,7 @@ def objective(exp: Experiment, trial: optuna.trial.Trial):
         buffer = []
         def flush_buffer():
             if buffer:
-                exp.srv.client.log_batch(
+                exp.client.log_batch(
                     run.info.run_id,
                     metrics=[mlflow.entities.Metric("loss", l, timestamp=ts, step=e) for e, l, ts in buffer],
                 )
@@ -70,7 +70,7 @@ def objective(exp: Experiment, trial: optuna.trial.Trial):
         mlflow.log_figure(fig, "prediction.png")
         plt.close(fig)
 
-        exp.srv.save_model(model)
+        exp.save_model(model)
         trial.set_user_attr("mlflow_run_id", run.info.run_id)
 
     return mse

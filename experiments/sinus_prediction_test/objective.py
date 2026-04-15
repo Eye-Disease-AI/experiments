@@ -29,7 +29,7 @@ def objective(exp: Experiment, trial: optuna.trial.Trial):
         buffer = []
         def flush_buffer():
             if buffer:
-                exp.srv.client.log_batch(
+                exp.client.log_batch(
                     run.info.run_id,
                     metrics=[mlflow.entities.Metric("loss", l, timestamp=ts, step=e) for e, l, ts in buffer],
                 )

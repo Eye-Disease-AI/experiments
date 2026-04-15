@@ -22,13 +22,13 @@ from experiments.sinus_prediction_test.data import *
 
 # Setup
 exp = Experiment(EXPERIMENT_NAME)
-exp.set_study(optuna.create_study(
+exp.study = optuna.create_study(
     study_name=STUDY_NAME,
     direction="minimize",
-    storage=exp.srv.storage,
+    storage=exp.storage,
     load_if_exists=True,
     pruner=optuna.pruners.MedianPruner(n_warmup_steps=10)
-))
+)
 
 # Custom optuna callback example
 # Stop if we reach an MSE threshold
