@@ -22,36 +22,10 @@ if not os.path.exists(data_path):
 dataset_name = "Nuclear_Cataract_2025_12_28"
 dataset_zip_name = f"{dataset_name}.zip"
 dataset_zip_path = os.path.join(data_path, dataset_zip_name)
-
-## Download
-if os.path.exists(dataset_zip_path):
-    print(f"Skipping dataset download as {dataset_zip_path} is already present")
-else:
-    username = input("Username: ")
-    password = getpass("Password: ")
-
-    basic = HTTPBasicAuth(username, password)
-    r = requests.get(f"https://zpbfileserver.krzyzanowski.dev/{dataset_zip_name}", auth=basic, stream=True)
-
-    with open(os.path.join(data_path, dataset_zip_name), "wb") as dest_file:
-        for chunk in r.iter_content(chunk_size=128):
-            dest_file.write(chunk)
-
-## Unzip
 inner_dir_name = " ".join(dataset_name.split("_")[:-3])
 inner_path = f"{inner_dir_name}/"
+
 DATASET_PATH=os.path.join(data_path, dataset_name)
-if os.path.isdir(DATASET_PATH):
-    print(f"Dataset already exists at {DATASET_PATH}")
-else:
-    with zipfile.ZipFile(dataset_zip_path, "r") as zip_ref:
-        for inner_file in zip_ref.namelist():
-            if inner_file.startswith(inner_path) and len(inner_file) > len(inner_path):
-                zip_ref.extract(inner_file, data_path + "/")
-
-    DATASET_PATH = shutil.move(os.path.join(data_path, inner_path), os.path.join(data_path, dataset_name))
-
-
 
 # Data loading
 class MyDataset(torch.utils.data.Dataset):
@@ -137,6 +111,29 @@ class MyDataModule(L.LightningDataModule):
         self.rng = rng
     
     def prepare_data(self):
+        """Download and unzip dataset. No state assignment here (Lightning may skip this on non-rank-0)."""
+        if not os.path.exists(dataset_zip_path):
+            print("Downloading the dataset")
+            username = input("Username: ")
+            password = getpass("Password: ")
+            basic = HTTPBasicAuth(username, password)
+            r = requests.get(f"https://zpbfileserver.krzyzanowski.dev/{dataset_zip_name}", auth=basic, stream=True)
+            with open(dataset_zip_path, "wb") as dest_file:
+                for chunk in r.iter_content(chunk_size=128):
+                    dest_file.write(chunk)
+        else:
+            print(f"Skipping dataset download as {dataset_zip_path} is already present")
+
+        if not os.path.isdir(DATASET_PATH):
+            with zipfile.ZipFile(dataset_zip_path, "r") as zip_ref:
+                for inner_file in zip_ref.namelist():
+                    if inner_file.startswith(inner_path) and len(inner_file) > len(inner_path):
+                        zip_ref.extract(inner_file, data_path + "/")
+            shutil.move(os.path.join(data_path, inner_path), DATASET_PATH)
+        else:
+            print(f"Dataset already exists at {DATASET_PATH}")
+
+    def setup(self, stage: str = None):
         max_angle = 15
         max_rad = math.radians(max_angle)
         pre_rot_size = int(math.ceil(self.image_size * (math.sin(max_rad) + math.cos(max_rad))))
@@ -148,36 +145,30 @@ class MyDataModule(L.LightningDataModule):
             transformsv2.CenterCrop((self.image_size, self.image_size)),
             transformsv2.GaussianNoise(mean=0, sigma=0.01)
         ])
-        self.val_transform =  transformsv2.Compose([
+        self.val_transform = transformsv2.Compose([
             transformsv2.Resize((self.image_size, self.image_size)),
             transformsv2.ConvertImageDtype(),
         ])
-        self.dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset = "trainvalSet")
 
-    def setup(self, stage: str = None):
-        self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet")
-        self.train_set, self.val_set, self.test_set = self.split_dataset(self.dataset)
-        self.test_set = SubsetTransformer(self.test_set, transform=self.val_transform)
-        self.train_set = SubsetTransformer(self.train_set, transform=self.transform)
-        self.val_set = SubsetTransformer(self.val_set, transform=self.val_transform)
-        self.test_set = SubsetTransformer(self.test_set, transform=self.val_transform)
-        # TODO: Check if we are on Linux and then set num_workers properly
-        
-        # macos fix for breaking when num_workers > 0
-        if (torch.mps.is_available()):
-            #set_start_method("fork")
-            num_workers = 0
-        else:
-            num_workers = cpu_count()-1 # leave one for the main process
-        
-        # BATCH_SIZE can be changed here
+        if not hasattr(self, 'dataset'):
+            self.dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="trainvalSet")
+
+        if not hasattr(self, 'test_dataset'):
+            self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet")
+
+        if not hasattr(self, 'train_set'):
+            train, val, test = self.split_dataset(self.dataset)
+            self.train_set = SubsetTransformer(train, transform=self.transform)
+            self.val_set   = SubsetTransformer(val,   transform=self.val_transform)
+            self.test_set  = SubsetTransformer(test,  transform=self.val_transform)
+
+        num_workers = 0 if torch.mps.is_available() else cpu_count() - 1
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
             dataset, batch_size=32, num_workers=num_workers, pin_memory=True
         )
-    
-    def split_dataset(self, dataset: MyDataset, train_ratio=8/9, val_ratio=1/9): # test is already 1/10
-        rng = random.Random(self.rng.seed)
 
+    def split_dataset(self, dataset: MyDataset, train_ratio=8/9, val_ratio=1/9):
+        rng = random.Random(self.rng.seed)
         packages = list(dataset.packs)
         rng.shuffle(packages)
 
@@ -186,9 +177,8 @@ class MyDataModule(L.LightningDataModule):
         val_n = int(val_ratio * total)
 
         train_pkgs = packages[:train_n]
-        val_pkgs = packages[train_n:train_n + val_n]
-        test_pkgs = packages[train_n + val_n: len(packages)]
-
+        val_pkgs   = packages[train_n:train_n + val_n]
+        test_pkgs  = packages[train_n + val_n:]
 
         def pkgs_to_indices(pkgs):
             return [
@@ -197,14 +187,10 @@ class MyDataModule(L.LightningDataModule):
                 for fname, label in pkg
             ]
 
-        train_idx = pkgs_to_indices(train_pkgs)
-        val_idx   = pkgs_to_indices(val_pkgs)
-        test_idx   = pkgs_to_indices(test_pkgs)
-
         return (
-            torch.utils.data.Subset(dataset, train_idx),
-            torch.utils.data.Subset(dataset, val_idx),
-            torch.utils.data.Subset(dataset, test_idx),
+            torch.utils.data.Subset(dataset, pkgs_to_indices(train_pkgs)),
+            torch.utils.data.Subset(dataset, pkgs_to_indices(val_pkgs)),
+            torch.utils.data.Subset(dataset, pkgs_to_indices(test_pkgs)),
         )
 
     def train_dataloader(self):

@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
+import os
 
 SEED = 2137
 EXPERIMENT_NAME = "nuclear-cataract-test"
-STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search3" # Multiple studies can be run per experiment, eg. optimizing different things
+STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search4" # Multiple studies can be run per experiment, eg. optimizing different things
 
 EPOCHS = 1
 MAX_TRIALS = 2
@@ -21,3 +22,6 @@ logging.getLogger("mlflow.utils.uv_utils").setLevel(logging.WARNING)
 logging.getLogger("mlflow.utils.environment").setLevel(logging.WARNING)
 logging.getLogger("mlflow.pytorch").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
+os.environ["LT_DISABLE_TIPS"] = "1"
+
+torch.set_float32_matmul_precision('medium')  # to use tensor cores on newer gpus

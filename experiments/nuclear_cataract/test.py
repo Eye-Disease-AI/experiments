@@ -1,11 +1,10 @@
-
-
-import matplotlib.pyplot as plt
-from mlflow import data
 import optuna
 import mlflow
-from optuna.study import MaxTrialsCallback
+import matplotlib.pyplot as plt
+import lightning as L
 from optuna.trial import TrialState
+from optuna.study import MaxTrialsCallback
+from lightning.pytorch.loggers import MLFlowLogger
 from optuna.visualization.matplotlib import (
     plot_optimization_history,
     plot_param_importances,
@@ -14,23 +13,24 @@ from optuna.visualization.matplotlib import (
 # Our utils and config
 from experiments.nuclear_cataract.common_config import *
 from lib.seed import RNG
+
 rng = RNG()
 rng.set_seed(SEED)
 
 from lib.mlflow_setup import Experiment, save_model
 from experiments.nuclear_cataract.objective import objective
-from experiments.nuclear_cataract.data import MyDataset, MyDataModule
 from experiments.nuclear_cataract.model import Model
+from experiments.nuclear_cataract.data import MyDataModule
 
 # Setup
 exp = Experiment(EXPERIMENT_NAME)
-exp.set_study(optuna.create_study(
+exp.study = optuna.create_study(
     study_name=STUDY_NAME,
     direction="minimize",
-    storage=exp.srv.storage,
+    storage=exp.storage,
     load_if_exists=True,
     pruner=optuna.pruners.MedianPruner(n_warmup_steps=10)
-))
+)
 
 # Custom optuna callback example
 # Stop if we reach an MSE threshold
@@ -85,35 +85,26 @@ else:
     mlflow.set_tag("best_trial_number", best_trial.number)
 
     # retrain best model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     best_lr = exp.study.best_params["lr"]
-    torch.manual_seed(SEED)
+    rng.set_seed(SEED)
     datamodule.setup(stage="fit")
-    best_model = Model(datamodule.dataset.n_classes).to(device)
-    best_optimizer = OPTIMIZER(best_model.parameters(), lr=best_lr)
-    loss_fn_best = LOSS_FN()
-    train_loader = datamodule.train_dataloader()
+    best_model = Model(datamodule.dataset.n_classes, lr=best_lr)
     
-    # Train
-    for _ in range(EPOCHS):
-        best_model.train()
-        for X_batch, y_batch in train_loader:
-            best_optimizer.zero_grad()
-            loss_fn_best(best_model(X_batch.to(device)), y_batch.to(device)).backward()
-            best_optimizer.step()
+    trainer = L.Trainer(
+        max_epochs=EPOCHS,
+        accelerator="auto",
+        enable_progress_bar=True,
+        enable_model_summary=False,
+        logger=MLFlowLogger(
+            run_id=parent_run.info.run_id,
+            tracking_uri=mlflow.get_tracking_uri(),
+        ),
+    )
+    trainer.fit(best_model, datamodule=datamodule)
 
-    # Eval
-    val_dataloader = datamodule.val_dataloader()
-    best_model.eval()
-    val_loss = 0.0
-    with torch.no_grad():
-        for X_batch, y_batch in val_dataloader:
-            val_loss += loss_fn_best(best_model(X_batch.to(device)), y_batch.to(device)).item()
-    val_loss /= len(val_dataloader)
-
-    mlflow.log_metric("retrain_test_mse", val_loss)
+    val_loss = trainer.callback_metrics["val_loss"].item()
+    mlflow.log_metric("retrain_val_loss", val_loss)
     save_model(best_model)
-
 
     # Study-level plots
     fig = plot_optimization_history(exp.study)
