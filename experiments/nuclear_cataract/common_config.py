@@ -10,7 +10,7 @@ EPOCHS = 100
 MAX_TRIALS = 20
 MSE_THRESHOLD = 0.0001
 LOG_EVERY_N_EPOCHS = 1
-OPTIMIZER= torch.optim.Adam
+OPTIMIZER= torch.optim.AdamW
 LOSS_FN= nn.CrossEntropyLoss
 
 

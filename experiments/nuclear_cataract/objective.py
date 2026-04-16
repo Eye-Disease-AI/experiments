@@ -6,7 +6,7 @@ from lightning.pytorch.loggers import MLFlowLogger
 from lightning.pytorch.callbacks import Callback
 from lib.seed import RNG
 from lib.mlflow_setup import Experiment
-from .model import Model
+from .models.convnext import ConvNext
 from .common_config import *
 
 class OptunaMLflowCallback(Callback):
@@ -45,7 +45,7 @@ class OptunaMLflowCallback(Callback):
         self._flush()
 
 
-def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial):
+def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial, ModelClass):
     rng.set_seed(SEED)
 
     lr           = trial.suggest_float("lr",           1e-4, 1e-1, log=True)
@@ -55,7 +55,7 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
 
     datamodule.batch_size = batch_size
     datamodule.setup(stage="fit")
-    model = Model(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout)
+    model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout)
 
     with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
         mlflow.set_tag("optuna_study", STUDY_NAME)
