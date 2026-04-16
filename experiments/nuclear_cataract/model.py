@@ -4,16 +4,16 @@ import torchvision
 import lightning as L
 
 class Model(L.LightningModule):
-    def __init__(self, n_classes, lr=1e03):
+    def __init__(self, n_classes, lr=1e-3, weight_decay=1e-4, dropout=0.2):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters() # saves all parameters to self.hparams
         self.model = torchvision.models.convnext.convnext_base(weights='IMAGENET1K_V1')
         new_clf = list(self.model.classifier.children())[:-1]
         new_clf.append(nn.LazyLinear(n_classes))
-        new_clf.append(nn.Dropout(0.2))
+        new_clf.append(nn.Dropout(self.hparams.dropout))
         self.model.classifier = nn.Sequential(*new_clf)
         self.loss_fn = nn.CrossEntropyLoss()
-        
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
@@ -32,4 +32,4 @@ class Model(L.LightningModule):
         self.log_dict({"val_loss": loss, "val_acc": acc}, prog_bar=True)
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)

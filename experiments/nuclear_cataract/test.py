@@ -85,10 +85,14 @@ else:
     mlflow.set_tag("best_trial_number", best_trial.number)
 
     # retrain best model
-    best_lr = exp.study.best_params["lr"]
+    best_params = exp.study.best_params
     rng.set_seed(SEED)
+    datamodule.batch_size = best_params["batch_size"]
     datamodule.setup(stage="fit")
-    best_model = Model(datamodule.dataset.n_classes, lr=best_lr)
+    best_model = Model(
+        datamodule.dataset.n_classes,
+        params=best_params
+    )
     
     trainer = L.Trainer(
         max_epochs=EPOCHS,

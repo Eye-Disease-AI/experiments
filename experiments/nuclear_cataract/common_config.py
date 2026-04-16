@@ -6,10 +6,10 @@ SEED = 2137
 EXPERIMENT_NAME = "nuclear-cataract-test"
 STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search4" # Multiple studies can be run per experiment, eg. optimizing different things
 
-EPOCHS = 1
-MAX_TRIALS = 2
+EPOCHS = 100
+MAX_TRIALS = 20
 MSE_THRESHOLD = 0.0001
-LOG_EVERY_N_EPOCHS = 1 # API calls are expensive, so its better to batch them
+LOG_EVERY_N_EPOCHS = 1
 OPTIMIZER= torch.optim.Adam
 LOSS_FN= nn.CrossEntropyLoss
 

@@ -48,14 +48,18 @@ class OptunaMLflowCallback(Callback):
 def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial):
     rng.set_seed(SEED)
 
-    lr = trial.suggest_float("lr", 1e-4, 1e-1, log=True)
+    lr           = trial.suggest_float("lr",           1e-4, 1e-1, log=True)
+    weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
+    dropout      = trial.suggest_float("dropout",      0.0,  0.5)
+    batch_size   = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
 
+    datamodule.batch_size = batch_size
     datamodule.setup(stage="fit")
-    model = Model(n_classes=datamodule.dataset.n_classes, lr=lr)
+    model = Model(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout)
 
     with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
         mlflow.set_tag("optuna_study", STUDY_NAME)
-        mlflow.log_params({"lr": lr, "seed": SEED, "model": str(model)})
+        mlflow.log_params({"lr": lr, "weight_decay": weight_decay, "dropout": dropout, "batch_size": batch_size, "seed": SEED, "model": str(model)})
 
         mlf_logger = MLFlowLogger(run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri())
         pruning_cb = OptunaMLflowCallback(
