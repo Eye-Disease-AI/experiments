@@ -12,6 +12,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "lightning>=2.6.1",
     "matplotlib>=3.10.8",
     "mlflow>=3.11.1",
     "optuna>=4.8.0",
@@ -20,4 +21,5 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "seaborn>=0.13.2",
     "torch>=2.11.0",
+    "torchvision>=0.26.0",
 ]
