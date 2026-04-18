@@ -36,8 +36,8 @@ class ModelBase(L.LightningModule):
         self._val_targets.append(y.detach().cpu())
 
     def on_validation_epoch_end(self):
-        all_probs = torch.cat(self._val_probs)     # [N, n_classes]
-        all_targets = torch.cat(self._val_targets) # [N]
+        all_probs = torch.cat(self._val_probs).to(self.device)     # [N, n_classes]
+        all_targets = torch.cat(self._val_targets).to(self.device) # [N]
         self._val_probs.clear()
         self._val_targets.clear()
 
@@ -48,9 +48,9 @@ class ModelBase(L.LightningModule):
         if self.current_epoch == self.trainer.max_epochs - 1:
             all_preds = all_probs.argmax(dim=1)
             df = pd.DataFrame({
-                "true_label": all_targets.numpy(),
-                "predicted_label": all_preds.numpy(),
-                **{f"prob_class_{i}": all_probs[:, i].numpy() for i in range(all_probs.shape[1])},
+                "true_label": all_targets.cpu().numpy(),
+                "predicted_label": all_preds.cpu().numpy(),
+                **{f"prob_class_{i}": all_probs[:, i].cpu().numpy() for i in range(all_probs.shape[1])},
             })
             with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w", prefix="val_predictions_") as f:
                 df.to_csv(f, index=True, index_label="sample_idx")

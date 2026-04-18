@@ -12,7 +12,7 @@ from optuna.visualization.matplotlib import (
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
 from .objective import objective
-from .common_config import SEED, EPOCHS, MAX_TRIALS, MSE_THRESHOLD
+from .common_config import SEED, EPOCHS, MAX_TRIALS, GPU_PRECISION
 
 
 def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule: L.LightningDataModule):
@@ -23,6 +23,7 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         load_if_exists=True,
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
     )
+    exp.study = study
 
     n_finished = sum(1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED))
     print(f"Study '{study_name}': {n_finished}/{MAX_TRIALS} finished trials.")
@@ -37,7 +38,7 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         mlflow.set_tag("model", ModelClass.__name__)
 
     if n_finished >= MAX_TRIALS:
-        print(f"Study already complete — best: {study.best_params}, val_loss: {study.best_value:.4f}")
+        print(f"Study already complete. Best: {study.best_params}, val_loss: {study.best_value:.4f}")
         mlflow.end_run()
         return
 
@@ -49,36 +50,52 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         ],
     )
 
-    best_trial = study.best_trial
-    mlflow.log_params(best_trial.params)
-    mlflow.log_metric("best_val_loss", best_trial.value)
-    mlflow.set_tag("best_trial_number", best_trial.number)
+    completed = [t for t in study.trials if t.state == TrialState.COMPLETE]
+    if not completed:
+        print("No completed trials. Skipping retrain and plots.")
+        mlflow.end_run()
+        return
 
-    best_params = study.best_params
-    rng.set_seed(SEED)
-    datamodule.batch_size = best_params["batch_size"]
-    datamodule.setup(stage="fit")
-    model_params = {k: v for k, v in best_params.items() if k != "batch_size"}
-    best_model = ModelClass(datamodule.dataset.n_classes, **model_params)
+    try:
+        best_trial = study.best_trial
+        mlflow.log_params(best_trial.params)
+        mlflow.log_metric("best_val_loss", best_trial.value)
+        mlflow.set_tag("best_trial_number", best_trial.number)
 
-    trainer = L.Trainer(
-        max_epochs=EPOCHS,
-        accelerator="auto",
-        enable_progress_bar=True,
-        enable_model_summary=False,
-        logger=MLFlowLogger(run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()),
-    )
-    trainer.fit(best_model, datamodule=datamodule)
+        best_params = study.best_params
+        rng.set_seed(SEED)
+        datamodule.batch_size = best_params["batch_size"]
+        datamodule.setup(stage="fit")
+        model_params = {k: v for k, v in best_params.items() if k != "batch_size"}
+        best_model = ModelClass(datamodule.dataset.n_classes, **model_params)
 
-    mlflow.log_metric("retrain_val_loss", trainer.callback_metrics["val_loss"].item())
-    save_model(best_model)
+        trainer = L.Trainer(
+            max_epochs=EPOCHS,
+            accelerator="auto",
+            enable_progress_bar=True,
+            enable_model_summary=False,
+            logger=MLFlowLogger(run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()),
+            precision=GPU_PRECISION,
+        )
+        trainer.fit(best_model, datamodule=datamodule)
 
-    fig = plot_optimization_history(study)
-    mlflow.log_figure(fig.figure, "optimization_history.png")
-    plt.close()
+        val_loss = trainer.callback_metrics.get("val_loss")
+        if val_loss is not None:
+            mlflow.log_metric("retrain_val_loss", val_loss.item())
+        save_model(best_model)
 
-    fig = plot_param_importances(study)
-    mlflow.log_figure(fig.figure, "param_importances.png")
-    plt.close()
+        try:
+            fig = plot_optimization_history(study)
+            mlflow.log_figure(fig.figure, "optimization_history.png")
+            plt.close()
+        except Exception:
+            pass
 
-    mlflow.end_run()
+        try:
+            fig = plot_param_importances(study)
+            mlflow.log_figure(fig.figure, "param_importances.png")
+            plt.close()
+        except Exception:
+            pass
+    finally:
+        mlflow.end_run()

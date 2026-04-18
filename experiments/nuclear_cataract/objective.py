@@ -8,6 +8,9 @@ from lib.seed import RNG
 from lib.mlflow_setup import Experiment
 from .models.convnext import ConvNext
 from .common_config import *
+from log_silencer import stop_logs
+stop_logs()
+
 
 class OptunaMLflowCallback(Callback):
     """Reports val_loss to Optuna each epoch and handles pruning + batched MLflow logging."""
@@ -51,14 +54,15 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
     lr           = trial.suggest_float("lr",           1e-4, 1e-1, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
     dropout      = trial.suggest_float("dropout",      0.0,  0.5)
-    batch_size   = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
+    batch_size   = trial.suggest_categorical("batch_size", [16, 32, 64])
 
     datamodule.batch_size = batch_size
     datamodule.setup(stage="fit")
     model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout)
 
     with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
-        mlflow.set_tag("optuna_study", STUDY_NAME)
+        mlflow.set_tag("optuna_study", exp.study.study_name)
+        mlflow.set_tag("optuna_trial", trial.number)
         mlflow.log_params({"lr": lr, "weight_decay": weight_decay, "dropout": dropout, "batch_size": batch_size, "seed": SEED, "model": str(model)})
 
         mlf_logger = MLFlowLogger(run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri())
@@ -77,6 +81,7 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
             enable_progress_bar=True,
             enable_model_summary=False,
             log_every_n_steps=1,
+            precision=GPU_PRECISION,
         )
 
         trainer.fit(model, datamodule=datamodule)

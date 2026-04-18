@@ -29,7 +29,7 @@ DATASET_PATH=os.path.join(data_path, dataset_name)
 # Data loading
 class MyDataset(torch.utils.data.Dataset):
     """Class representing the dataset. Converts the dataset files into values usable to the model."""
-    def __init__(self, dir, return_paths=False, split_subset="trainvalSet"):
+    def __init__(self, dir, return_paths=False, split_subset="trainvalSet", cache=True, cache_size: int | None = None):
         super().__init__()
         self.data_dir = dir
         self.images_dir = os.path.join(self.data_dir, "images")
@@ -47,7 +47,7 @@ class MyDataset(torch.utils.data.Dataset):
 
         self.annotations = [(fname, label) for pack in self.packs for fname, label in pack]
         self.label_names = sorted({label for _, label in self.annotations}, reverse=True)
-        
+
         self.n_classes = len(self.label_names)
         # map of labelname to idx
         self.label_to_idx = {name: i for i, name in enumerate(self.label_names)}
@@ -61,7 +61,16 @@ class MyDataset(torch.utils.data.Dataset):
         self.path_to_index = {
             fname: i for i, (fname, _) in enumerate(self.annotations)
         }
-        
+        # cache for images to reduce io lag
+        self._cache = []
+        if cache:
+            resize = transformsv2.Resize((cache_size, cache_size)) if cache_size else None
+            print(f"Caching {len(self.annotations)} images" + (f" at {cache_size}x{cache_size}" if cache_size else "") + "...")
+            for fname, _ in self.annotations:
+                img = torchvision.io.decode_image(os.path.join(self.images_dir, fname))
+                self._cache.append(resize(img) if resize else img)
+            print("Cache ready.")
+
     def __len__(self):
         """size of dataset"""
         return len(self.annotations)
@@ -69,7 +78,7 @@ class MyDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         """get n'th item (img,label) in the dataset"""
         fname, label = self.annotations[idx]
-        img = torchvision.io.decode_image(os.path.join(self.images_dir, fname))
+        img = self._cache[idx] if self._cache else torchvision.io.decode_image(os.path.join(self.images_dir, fname))
 
         if self.return_paths:
             return img, label, fname
@@ -137,8 +146,14 @@ class MyDataModule(L.LightningDataModule):
         max_angle = 15
         max_rad = math.radians(max_angle)
         pre_rot_size = int(math.ceil(self.image_size * (math.sin(max_rad) + math.cos(max_rad))))
+        
+        if not hasattr(self, 'dataset'):
+            self.dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="trainvalSet", cache=True, cache_size=pre_rot_size)
+
+        if not hasattr(self, 'test_dataset'):
+            self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet", cache=True, cache_size=pre_rot_size)
+
         self.transform = transformsv2.Compose([
-            transformsv2.Resize((pre_rot_size, pre_rot_size)),
             transformsv2.ConvertImageDtype(),
             transformsv2.RandomHorizontalFlip(0.5),
             transformsv2.RandomRotation(15),
@@ -150,21 +165,14 @@ class MyDataModule(L.LightningDataModule):
             transformsv2.ConvertImageDtype(),
         ])
 
-        if not hasattr(self, 'dataset'):
-            self.dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="trainvalSet")
-
-        if not hasattr(self, 'test_dataset'):
-            self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet")
-
         if not hasattr(self, 'train_set'):
             train, val = self.split_dataset(self.dataset)
             self.train_set = SubsetTransformer(train, transform=self.transform)
             self.val_set   = SubsetTransformer(val,   transform=self.val_transform)
             self.test_set   = SubsetTransformer(self.test_dataset,   transform=self.val_transform)
 
-        num_workers = 0 if torch.mps.is_available() else cpu_count() - 1
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=self.batch_size, num_workers=num_workers, pin_memory=True
+            dataset, batch_size=self.batch_size, num_workers=0, pin_memory=True
         )
 
     def split_dataset(self, dataset: MyDataset, train_ratio=8/9, val_ratio=1/9):
