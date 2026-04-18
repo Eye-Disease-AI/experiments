@@ -76,7 +76,7 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
             callbacks=[pruning_cb],
             enable_progress_bar=True,
             enable_model_summary=False,
-            log_every_n_steps=5,
+            log_every_n_steps=1,
         )
 
         trainer.fit(model, datamodule=datamodule)
