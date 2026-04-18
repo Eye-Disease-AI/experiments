@@ -8,11 +8,13 @@ from experiments.nuclear_cataract.data import MyDataModule
 from lib.mlflow_setup import Experiment
 from lib.seed import RNG
 
+TRY=1
+
 MODELS = [
-    (ConvNext,    f"{EXPERIMENT_NAME}/convnext-search1"),
-    (ViT,         f"{EXPERIMENT_NAME}/vit-search1"),
-    (Swin,        f"{EXPERIMENT_NAME}/swin-search1"),
-    (ConvNextViT, f"{EXPERIMENT_NAME}/convnext-vit-search1"),
+    (ConvNext,    f"{EXPERIMENT_NAME}/convnext-search_{TRY}"),
+    (ViT,         f"{EXPERIMENT_NAME}/vit-search_{TRY}"),
+    (Swin,        f"{EXPERIMENT_NAME}/swin-search_{TRY}"),
+    (ConvNextViT, f"{EXPERIMENT_NAME}/convnext-vit-search_{TRY}"),
 ]
 
 rng = RNG()
