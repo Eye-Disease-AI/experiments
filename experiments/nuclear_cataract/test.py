@@ -4,6 +4,7 @@ from experiments.nuclear_cataract.models.convnext import ConvNext
 from experiments.nuclear_cataract.data import MyDataModule
 from lib.mlflow_setup import Experiment
 from lib.seed import RNG
+STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search5"
 
 rng = RNG()
 rng.set_seed(SEED)

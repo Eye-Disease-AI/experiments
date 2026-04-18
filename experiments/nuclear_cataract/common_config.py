@@ -4,7 +4,6 @@ import os
 
 SEED = 2137
 EXPERIMENT_NAME = "nuclear-cataract-test"
-STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search5" # Multiple studies can be run per experiment, eg. optimizing different things
 
 EPOCHS = 100
 MAX_TRIALS = 20
