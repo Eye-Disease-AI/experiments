@@ -1,5 +1,5 @@
 from lib.seed import RNG
-from .common_config import NORMALIZE_MEAN, NORMALIZE_STD
+from experiments.nuclear_cataract.common_config import NORMALIZE_MEAN, NORMALIZE_STD
 import lightning as L
 import os
 import torchvision
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     rng = RNG()
     rng.set_seed(2137)
 
-    datamodule = MyDataModule(rng, True)
+    datamodule = MyDataModule(rng, return_paths=True)
     datamodule.prepare_data()
     datamodule.setup()
 

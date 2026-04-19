@@ -7,7 +7,7 @@ from lightning.pytorch.callbacks import Callback, EarlyStopping
 from lib.seed import RNG
 from lib.mlflow_setup import Experiment
 from .models.convnext import ConvNext
-from .common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION
+from .common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
 from log_silencer import stop_logs
 stop_logs()
 
@@ -20,6 +20,7 @@ class OptunaMLflowCallback(Callback):
         self.run_id = run_id
         self.log_every_n_epochs = log_every_n_epochs
         self.buffer = []
+        self.best_value = None
 
     def _flush(self):
         if self.buffer:
@@ -39,13 +40,52 @@ class OptunaMLflowCallback(Callback):
         if len(self.buffer) >= self.log_every_n_epochs:
             self._flush()
 
-        self.trial.report(metric_val.item(), epoch)
+        v = metric_val.item()
+        agg = min if OPTUNA_DIRECTION == "min" else max
+        self.best_value = agg(v, self.best_value) if self.best_value is not None else v
+
+        self.trial.report(v, epoch)
         if self.trial.should_prune():
             self._flush()
             raise optuna.TrialPruned()
 
     def on_train_end(self, trainer: L.Trainer, pl_module: L.LightningDataModule):
         self._flush()
+
+
+class BackboneFreezeCallback(Callback):
+    """Freezes backbone at start; unfreezes it once the metric stops improving."""
+    def __init__(self, monitor: str, patience: int, mode: str):
+        self.monitor = monitor
+        self.patience = patience
+        self.mode = mode
+        self._best = None
+        self._wait = 0
+        self._unfrozen = False
+
+    def on_fit_start(self, trainer: L.Trainer, pl_module: L.LightningModule):
+        for m in pl_module.backbone_modules():
+            for p in m.parameters():
+                p.requires_grad = False
+
+    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
+        if self._unfrozen:
+            return
+        val = trainer.callback_metrics.get(self.monitor)
+        if val is None:
+            return
+        v = val.item()
+        improved = self._best is None or (v < self._best if self.mode == "min" else v > self._best)
+        if improved:
+            self._best = v
+            self._wait = 0
+        else:
+            self._wait += 1
+            if self._wait >= self.patience:
+                for m in pl_module.backbone_modules():
+                    for p in m.parameters():
+                        p.requires_grad = True
+                self._unfrozen = True
 
 
 def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial, ModelClass):
@@ -73,12 +113,13 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
             log_every_n_epochs=LOG_EVERY_N_EPOCHS,
         )
         early_stop_cb = EarlyStopping(monitor=OPTUNA_METRIC, patience=EARLY_STOPPING_PATIENCE, mode=OPTUNA_DIRECTION)
+        freeze_cb = BackboneFreezeCallback(monitor=OPTUNA_METRIC, patience=BACKBONE_UNFREEZE_PATIENCE, mode=OPTUNA_DIRECTION)
 
         trainer = L.Trainer(
             max_epochs=EPOCHS,
             accelerator="auto",
             logger=mlf_logger,
-            callbacks=[pruning_cb, early_stop_cb],
+            callbacks=[freeze_cb, pruning_cb, early_stop_cb],
             enable_progress_bar=True,
             enable_model_summary=False,
             log_every_n_steps=1,
@@ -86,6 +127,4 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
         )
 
         trainer.fit(model, datamodule=datamodule)
-
-    agg = min if OPTUNA_DIRECTION == "min" else max
-    return agg(trial.intermediate_values.values())
+        return pruning_cb.best_value

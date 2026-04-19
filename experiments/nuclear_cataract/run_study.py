@@ -12,8 +12,8 @@ from optuna.visualization.matplotlib import (
 )
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
-from .objective import objective
-from .common_config import SEED, EPOCHS, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION
+from .objective import objective, BackboneFreezeCallback
+from .common_config import SEED, EPOCHS, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
 
 
 def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule: L.LightningDataModule):
@@ -73,11 +73,13 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         model_params = {k: v for k, v in best_params.items() if k != "batch_size"}
         best_model = ModelClass(datamodule.dataset.n_classes, **model_params)
 
+        freeze_cb = BackboneFreezeCallback(monitor=OPTUNA_METRIC, patience=BACKBONE_UNFREEZE_PATIENCE, mode=OPTUNA_DIRECTION)
         trainer = L.Trainer(
             max_epochs=best_epoch + 1,
             accelerator="auto",
             enable_progress_bar=True,
             enable_model_summary=False,
+            callbacks=[freeze_cb],
             logger=MLFlowLogger(run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()),
             precision=GPU_PRECISION,
         )

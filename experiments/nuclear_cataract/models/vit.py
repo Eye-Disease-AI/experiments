@@ -16,5 +16,8 @@ class ViT(ModelBase):
         )
         self.loss_fn = nn.CrossEntropyLoss()
 
+    def backbone_modules(self):
+        return [self.model.encoder]
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)

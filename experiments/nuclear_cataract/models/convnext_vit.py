@@ -52,6 +52,9 @@ class ConvNextViT(ModelBase):
         )
         self.loss_fn = nn.CrossEntropyLoss()
 
+    def backbone_modules(self):
+        return [self.features, self.encoder]
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch = x.size(0)
         patches = self.features(x).flatten(2).transpose(1, 2)      # 7x7 spatial grid flattened to 49 tokens

@@ -16,5 +16,8 @@ class Swin(ModelBase):
         )
         self.loss_fn = nn.CrossEntropyLoss()
 
+    def backbone_modules(self):
+        return [self.model.features, self.model.norm]
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)

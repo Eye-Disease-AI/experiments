@@ -8,7 +8,7 @@ from experiments.nuclear_cataract.data import MyDataModule
 from lib.mlflow_setup import Experiment
 from lib.seed import RNG
 
-TRY=1
+TRY=2
 
 MODELS = [
     (ConvNext,    f"{EXPERIMENT_NAME}/convnext-search_{TRY}"),

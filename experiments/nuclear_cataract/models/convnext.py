@@ -10,10 +10,13 @@ class ConvNext(ModelBase):
         self.save_hyperparameters()
         self.model = torchvision.models.convnext_base(weights='IMAGENET1K_V1')
         new_clf = list(self.model.classifier.children())[:-1]
-        new_clf.append(nn.LazyLinear(n_classes))
         new_clf.append(nn.Dropout(dropout))
+        new_clf.append(nn.LazyLinear(n_classes))
         self.model.classifier = nn.Sequential(*new_clf)
         self.loss_fn = nn.CrossEntropyLoss()
+
+    def backbone_modules(self):
+        return [self.model.features]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
