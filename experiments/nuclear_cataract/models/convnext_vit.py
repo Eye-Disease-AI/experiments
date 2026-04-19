@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from .base import ModelBase
+from ..common_config import LOSS_FN
 
 
 class ConvNextViT(ModelBase):
@@ -50,7 +51,7 @@ class ConvNextViT(ModelBase):
             nn.Dropout(dropout),
             nn.Linear(vit_channels, n_classes),
         )
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn = LOSS_FN()
 
     def backbone_modules(self):
         return [self.features, self.encoder]

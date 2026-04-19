@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 from .base import ModelBase
+from ..common_config import LOSS_FN
 
 
 class ConvNext(ModelBase):
@@ -13,7 +14,7 @@ class ConvNext(ModelBase):
         new_clf.append(nn.Dropout(dropout))
         new_clf.append(nn.LazyLinear(n_classes))
         self.model.classifier = nn.Sequential(*new_clf)
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn = LOSS_FN()
 
     def backbone_modules(self):
         return [self.model.features]

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 from .base import ModelBase
+from ..common_config import LOSS_FN
 
 
 class Swin(ModelBase):
@@ -14,7 +15,7 @@ class Swin(ModelBase):
             nn.Dropout(dropout),
             nn.Linear(in_features, n_classes),
         )
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn = LOSS_FN()
 
     def backbone_modules(self):
         return [self.model.features, self.model.norm]

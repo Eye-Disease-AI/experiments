@@ -7,7 +7,7 @@ import mlflow
 import pandas as pd
 from torchmetrics import MetricCollection
 from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC
-from ..common_config import BACKBONE_LR_FACTOR
+from ..common_config import BACKBONE_LR_FACTOR, OPTIMIZER
 
 
 class ModelBase(L.LightningModule):
@@ -69,7 +69,7 @@ class ModelBase(L.LightningModule):
         backbone_ids = {id(p) for m in self.backbone_modules() for p in m.parameters()}
         backbone_params = [p for p in self.parameters() if id(p) in backbone_ids]
         head_params     = [p for p in self.parameters() if id(p) not in backbone_ids]
-        return torch.optim.AdamW([
+        return OPTIMIZER([
             {"params": head_params,     "lr": self.hparams.lr},
             {"params": backbone_params, "lr": self.hparams.lr * BACKBONE_LR_FACTOR},
         ], weight_decay=self.hparams.weight_decay)
