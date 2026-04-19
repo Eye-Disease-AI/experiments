@@ -12,13 +12,13 @@ from optuna.visualization.matplotlib import (
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
 from .objective import objective
-from .common_config import SEED, EPOCHS, MAX_TRIALS, GPU_PRECISION
+from .common_config import SEED, EPOCHS, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION
 
 
 def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule: L.LightningDataModule):
     study = optuna.create_study(
         study_name=study_name,
-        direction="minimize",
+        direction={"min": "minimize", "max": "maximize"}[OPTUNA_DIRECTION],
         storage=exp.storage,
         load_if_exists=True,
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
@@ -38,7 +38,7 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         mlflow.set_tag("model", ModelClass.__name__)
 
     if n_finished >= MAX_TRIALS:
-        print(f"Study already complete. Best: {study.best_params}, val_loss: {study.best_value:.4f}")
+        print(f"Study already complete. Best: {study.best_params}, {OPTUNA_METRIC}: {study.best_value:.4f}")
         mlflow.end_run()
         return
 
@@ -59,9 +59,9 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
     try:
         best_trial = study.best_trial
         mlflow.log_params(best_trial.params)
-        mlflow.log_metric("best_val_loss", best_trial.value)
+        mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value)
         mlflow.set_tag("best_trial_number", best_trial.number)
-        agg = min if study.direction == optuna.study.StudyDirection.MINIMIZE else max
+        agg = min if OPTUNA_DIRECTION == "min" else max
         best_epoch = agg(best_trial.intermediate_values, key=best_trial.intermediate_values.get)
         mlflow.log_metric("best_epoch", best_epoch)
 
@@ -82,9 +82,9 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         )
         trainer.fit(best_model, datamodule=datamodule)
 
-        val_loss = trainer.callback_metrics.get("val_loss")
-        if val_loss is not None:
-            mlflow.log_metric("retrain_val_loss", val_loss.item())
+        retrain_metric = trainer.callback_metrics.get(OPTUNA_METRIC)
+        if retrain_metric is not None:
+            mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
         save_model(best_model)
 
         try:

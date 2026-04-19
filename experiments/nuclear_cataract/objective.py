@@ -7,7 +7,7 @@ from lightning.pytorch.callbacks import Callback, EarlyStopping
 from lib.seed import RNG
 from lib.mlflow_setup import Experiment
 from .models.convnext import ConvNext
-from .common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE
+from .common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION
 from log_silencer import stop_logs
 stop_logs()
 
@@ -25,21 +25,21 @@ class OptunaMLflowCallback(Callback):
         if self.buffer:
             self.exp.client.log_batch(
                 self.run_id,
-                metrics=[mlflow.entities.Metric("val_loss", l, ts, e) for e, l, ts in self.buffer],
+                metrics=[mlflow.entities.Metric(OPTUNA_METRIC, l, ts, e) for e, l, ts in self.buffer],
             )
             self.buffer.clear()
 
     def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningDataModule):
-        val_loss = trainer.callback_metrics.get("val_loss")
-        if val_loss is None:
+        metric_val = trainer.callback_metrics.get(OPTUNA_METRIC)
+        if metric_val is None:
             return
         epoch = trainer.current_epoch
-        self.buffer.append((epoch, val_loss.item(), int(time.time() * 1000)))
+        self.buffer.append((epoch, metric_val.item(), int(time.time() * 1000)))
 
         if len(self.buffer) >= self.log_every_n_epochs:
             self._flush()
 
-        self.trial.report(val_loss.item(), epoch)
+        self.trial.report(metric_val.item(), epoch)
         if self.trial.should_prune():
             self._flush()
             raise optuna.TrialPruned()
@@ -72,7 +72,7 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
             run_id=run.info.run_id,
             log_every_n_epochs=LOG_EVERY_N_EPOCHS,
         )
-        early_stop_cb = EarlyStopping(monitor="val_loss", patience=EARLY_STOPPING_PATIENCE, mode="min")
+        early_stop_cb = EarlyStopping(monitor=OPTUNA_METRIC, patience=EARLY_STOPPING_PATIENCE, mode=OPTUNA_DIRECTION)
 
         trainer = L.Trainer(
             max_epochs=EPOCHS,
@@ -87,5 +87,5 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
 
         trainer.fit(model, datamodule=datamodule)
 
-    agg = min if exp.study.direction == optuna.study.StudyDirection.MINIMIZE else max
+    agg = min if OPTUNA_DIRECTION == "min" else max
     return agg(trial.intermediate_values.values())
