@@ -3,11 +3,11 @@ import optuna
 import mlflow
 import lightning as L
 from lightning.pytorch.loggers import MLFlowLogger
-from lightning.pytorch.callbacks import Callback
+from lightning.pytorch.callbacks import Callback, EarlyStopping
 from lib.seed import RNG
 from lib.mlflow_setup import Experiment
 from .models.convnext import ConvNext
-from .common_config import *
+from .common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE
 from log_silencer import stop_logs
 stop_logs()
 
@@ -72,12 +72,13 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
             run_id=run.info.run_id,
             log_every_n_epochs=LOG_EVERY_N_EPOCHS,
         )
+        early_stop_cb = EarlyStopping(monitor="val_loss", patience=EARLY_STOPPING_PATIENCE, mode="min")
 
         trainer = L.Trainer(
             max_epochs=EPOCHS,
             accelerator="auto",
             logger=mlf_logger,
-            callbacks=[pruning_cb],
+            callbacks=[pruning_cb, early_stop_cb],
             enable_progress_bar=True,
             enable_model_summary=False,
             log_every_n_steps=1,
@@ -86,4 +87,5 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
 
         trainer.fit(model, datamodule=datamodule)
 
-    return trainer.callback_metrics["val_loss"].item()
+    agg = min if exp.study.direction == optuna.study.StudyDirection.MINIMIZE else max
+    return agg(trial.intermediate_values.values())

@@ -61,6 +61,9 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         mlflow.log_params(best_trial.params)
         mlflow.log_metric("best_val_loss", best_trial.value)
         mlflow.set_tag("best_trial_number", best_trial.number)
+        agg = min if study.direction == optuna.study.StudyDirection.MINIMIZE else max
+        best_epoch = agg(best_trial.intermediate_values, key=best_trial.intermediate_values.get)
+        mlflow.log_metric("best_epoch", best_epoch)
 
         best_params = study.best_params
         rng.set_seed(SEED)
@@ -70,7 +73,7 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         best_model = ModelClass(datamodule.dataset.n_classes, **model_params)
 
         trainer = L.Trainer(
-            max_epochs=EPOCHS,
+            max_epochs=best_epoch + 1,
             accelerator="auto",
             enable_progress_bar=True,
             enable_model_summary=False,
