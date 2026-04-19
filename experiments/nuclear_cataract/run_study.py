@@ -1,5 +1,6 @@
 import optuna
 import mlflow
+
 import matplotlib.pyplot as plt
 import lightning as L
 from optuna.trial import TrialState
@@ -85,7 +86,8 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         retrain_metric = trainer.callback_metrics.get(OPTUNA_METRIC)
         if retrain_metric is not None:
             mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
-        save_model(best_model)
+        example_input, *_ = next(iter(datamodule.val_dataloader()))
+        save_model(best_model, example_input=example_input[:1])
 
         try:
             fig = plot_optimization_history(study)
