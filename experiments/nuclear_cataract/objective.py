@@ -54,7 +54,7 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
     lr           = trial.suggest_float("lr",           1e-4, 1e-1, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
     dropout      = trial.suggest_float("dropout",      0.0,  0.5)
-    batch_size   = trial.suggest_categorical("batch_size", [16, 32, 64])
+    batch_size   = trial.suggest_categorical("batch_size", [128])
 
     datamodule.batch_size = batch_size
     datamodule.setup(stage="fit")
