@@ -18,7 +18,7 @@ class ConvNextViT(ModelBase):
         for p in self.features.parameters():
             p.requires_grad = False
 
-        n_patches = 7 * 7  # 49 for 224×224 input
+        n_patches = 7 * 7  # 49 for 224x224 input
         self.proj = nn.Linear(1024, self._VIT_DIM)
         self.cls_token = nn.Parameter(torch.empty(1, 1, self._VIT_DIM))
         self.pos_embed = nn.Parameter(torch.empty(1, n_patches + 1, self._VIT_DIM))

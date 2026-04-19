@@ -1,4 +1,5 @@
 from lib.seed import RNG
+from .common_config import NORMALIZE_MEAN, NORMALIZE_STD
 import lightning as L
 import os
 import torchvision
@@ -155,6 +156,7 @@ class MyDataModule(L.LightningDataModule):
 
         self.transform = transformsv2.Compose([
             transformsv2.ConvertImageDtype(),
+            transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
             transformsv2.RandomHorizontalFlip(0.5),
             transformsv2.RandomRotation(15),
             transformsv2.CenterCrop((self.image_size, self.image_size)),
@@ -163,6 +165,7 @@ class MyDataModule(L.LightningDataModule):
         self.val_transform = transformsv2.Compose([
             transformsv2.Resize((self.image_size, self.image_size)),
             transformsv2.ConvertImageDtype(),
+            transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
         ])
 
         if not hasattr(self, 'train_set'):
