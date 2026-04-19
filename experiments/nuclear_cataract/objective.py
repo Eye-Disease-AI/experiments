@@ -51,7 +51,7 @@ class OptunaMLflowCallback(Callback):
 def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial, ModelClass):
     rng.set_seed(SEED)
 
-    lr           = trial.suggest_float("lr",           1e-4, 1e-1, log=True)
+    lr           = trial.suggest_float("lr",           1e-6, 1e-4, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
     dropout      = trial.suggest_float("dropout",      0.0,  0.5)
     batch_size   = trial.suggest_categorical("batch_size", [128])
