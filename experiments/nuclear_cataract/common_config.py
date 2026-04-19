@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 SEED = 2137
-EXPERIMENT_NAME = "nuclear-cataract-baseline_v3"
+EXPERIMENT_NAME = "nuclear-cataract-baseline_v4"
 
 EPOCHS = 100
 MAX_TRIALS = 20
