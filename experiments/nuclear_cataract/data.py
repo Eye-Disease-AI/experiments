@@ -92,9 +92,10 @@ class MyDataset(torch.utils.data.Dataset):
 
 class SubsetTransformer(torch.utils.data.Dataset):
     """Wrapper for subset that allows applying different transforms on each dataset subset (train, val, test)"""
-    def __init__(self, subset, transform=None):
+    def __init__(self, subset, transform=None, cache=True):
         self.subset = subset
         self.transform = transform
+        self.do_cache=cache
 
     def __len__(self):
         return len(self.subset)
@@ -149,10 +150,10 @@ class MyDataModule(L.LightningDataModule):
         pre_rot_size = int(math.ceil(self.image_size * (math.sin(max_rad) + math.cos(max_rad))))
         
         if not hasattr(self, 'dataset'):
-            self.dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="trainvalSet", cache=True, cache_size=pre_rot_size)
+            self.dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="trainvalSet", cache=self.do_cache, cache_size=pre_rot_size)
 
         if not hasattr(self, 'test_dataset'):
-            self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet", cache=True, cache_size=pre_rot_size)
+            self.test_dataset = MyDataset(self.dir, return_paths=self.return_paths, split_subset="testSet", cache=self.do_cache, cache_size=pre_rot_size)
 
         self.transform = transformsv2.Compose([
             transformsv2.ConvertImageDtype(),
@@ -213,7 +214,7 @@ if __name__ == "__main__":
     rng = RNG()
     rng.set_seed(2137)
 
-    datamodule = MyDataModule(rng, return_paths=True)
+    datamodule = MyDataModule(rng, return_paths=True, cache=False)
     datamodule.prepare_data()
     datamodule.setup()
 
