@@ -111,7 +111,7 @@ class SubsetTransformer(torch.utils.data.Dataset):
 
 class MyDataModule(L.LightningDataModule):
     """Splits to train/val/test subsets with custom transforms"""
-    def __init__(self, rng: RNG, batch_size: int = 32, return_paths=False):
+    def __init__(self, rng: RNG, batch_size: int = 32, return_paths=False, cache=True):
         super().__init__()
         self.dir = DATASET_PATH
         self.image_size = 224
@@ -120,6 +120,7 @@ class MyDataModule(L.LightningDataModule):
         self.return_paths = return_paths
         self.rng = rng
         self.batch_size = batch_size
+        self.do_cache = cache
     
     def prepare_data(self):
         """Download and unzip dataset. No state assignment here (Lightning may skip this on non-rank-0)."""
