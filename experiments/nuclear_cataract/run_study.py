@@ -1,6 +1,5 @@
 import optuna
 import mlflow
-
 import matplotlib.pyplot as plt
 import lightning as L
 from optuna.trial import TrialState

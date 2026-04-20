@@ -108,6 +108,7 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
     model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout, class_weights=class_weights)
 
     with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
+        trial.set_user_attr("mlflow_run_id", run.info.run_id)
         mlflow.set_tag("optuna_study", exp.study.study_name)
         mlflow.set_tag("optuna_trial", trial.number)
         mlflow.log_params({"lr": lr, "weight_decay": weight_decay, "dropout": dropout, "batch_size": batch_size, "seed": SEED, "model": str(model)})

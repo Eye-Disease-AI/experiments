@@ -5,8 +5,10 @@ import torch.nn as nn
 import lightning as L
 import mlflow
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from torchmetrics import MetricCollection
-from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC, MulticlassF1Score
+from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC, MulticlassF1Score, MulticlassConfusionMatrix
 from ..common_config import BACKBONE_LR_FACTOR, OPTIMIZER
 
 
@@ -14,6 +16,7 @@ class ModelBase(L.LightningModule):
     def __init__(self, n_classes: int, class_weights: torch.Tensor | None = None):
         super().__init__()
         self.loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+        self._n_classes = n_classes
         self.val_metrics = MetricCollection({
             "val_precision": MulticlassPrecision(num_classes=n_classes, average='macro'),
             "val_recall":    MulticlassRecall(num_classes=n_classes, average='macro'),
@@ -22,6 +25,8 @@ class ModelBase(L.LightningModule):
         })
         self._val_probs: list[torch.Tensor] = []
         self._val_targets: list[torch.Tensor] = []
+        self._last_all_probs: torch.Tensor | None = None
+        self._last_all_targets: torch.Tensor | None = None
 
     def training_step(self, batch, batch_idx):
         x, y = batch
@@ -48,21 +53,37 @@ class ModelBase(L.LightningModule):
         self.log_dict(self.val_metrics(all_probs, all_targets), prog_bar=True)
         self.val_metrics.reset()
 
-        # Save per-sample predictions as CSV artifact on the last epoch only
-        if self.current_epoch == self.trainer.max_epochs - 1:
-            all_preds = all_probs.argmax(dim=1)
-            df = pd.DataFrame({
-                "true_label": all_targets.cpu().numpy(),
-                "predicted_label": all_preds.cpu().numpy(),
-                **{f"prob_class_{i}": all_probs[:, i].cpu().numpy() for i in range(all_probs.shape[1])},
-            })
-            with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w", prefix="val_predictions_") as f:
-                df.to_csv(f, index=True, index_label="sample_idx")
-                tmppath = f.name
-            try:
-                mlflow.log_artifact(tmppath, artifact_path="val_predictions")
-            finally:
-                os.unlink(tmppath)
+        self._last_all_probs = all_probs.cpu()
+        self._last_all_targets = all_targets.cpu()
+
+    def on_train_end(self):
+        if self._last_all_probs is None:
+            return
+        all_probs = self._last_all_probs.to(self.device)
+        all_targets = self._last_all_targets.to(self.device)
+
+        cm = MulticlassConfusionMatrix(num_classes=self._n_classes).to(self.device)
+        cm_matrix = cm(all_probs, all_targets).cpu().numpy()
+        fig, ax = plt.subplots(figsize=(self._n_classes * 2, self._n_classes * 2))
+        sns.heatmap(cm_matrix, annot=True, fmt='d', ax=ax, cmap='Blues')
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('True')
+        mlflow.log_figure(fig, "confusion_matrix.png")
+        plt.close(fig)
+
+        all_preds = all_probs.argmax(dim=1)
+        df = pd.DataFrame({
+            "true_label": all_targets.cpu().numpy(),
+            "predicted_label": all_preds.cpu().numpy(),
+            **{f"prob_class_{i}": all_probs[:, i].cpu().numpy() for i in range(all_probs.shape[1])},
+        })
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w", prefix="val_predictions_") as f:
+            df.to_csv(f, index=True, index_label="sample_idx")
+            tmppath = f.name
+        try:
+            mlflow.log_artifact(tmppath, artifact_path="val_predictions")
+        finally:
+            os.unlink(tmppath)
 
     def backbone_modules(self) -> list[nn.Module]:
         return []
