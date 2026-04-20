@@ -3,7 +3,8 @@ import optuna
 import mlflow
 import lightning as L
 from lightning.pytorch.loggers import MLFlowLogger
-from lightning.pytorch.callbacks import Callback, EarlyStopping
+from lightning.pytorch.callbacks import Callback
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lib.seed import RNG
 from lib.mlflow_setup import Experiment
 from .models.convnext import ConvNext
@@ -86,12 +87,17 @@ class BackboneFreezeCallback(Callback):
                     for p in m.parameters():
                         p.requires_grad = True
                 self._unfrozen = True
+                # reset early stopping patience after unfreezing
+                for cb in trainer.callbacks:
+                    if isinstance(cb, EarlyStopping):
+                        cb.wait_count = 0
+                        cb.best_score = None
 
 
 def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial, ModelClass):
     rng.set_seed(SEED)
 
-    lr           = trial.suggest_float("lr",           1e-6, 1e-4, log=True)
+    lr           = trial.suggest_float("lr",           1e-5, 1e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
     dropout      = trial.suggest_float("dropout",      0.0,  0.5)
     batch_size   = trial.suggest_categorical("batch_size", [64])
