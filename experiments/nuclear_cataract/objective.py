@@ -104,7 +104,8 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
 
     datamodule.batch_size = batch_size
     datamodule.setup(stage="fit")
-    model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout)
+    class_weights = datamodule.train_class_weights
+    model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout, class_weights=class_weights)
 
     with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
         mlflow.set_tag("optuna_study", exp.study.study_name)
@@ -128,6 +129,7 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
             callbacks=[freeze_cb, pruning_cb, early_stop_cb],
             enable_progress_bar=True,
             enable_model_summary=False,
+            enable_checkpointing=False,
             log_every_n_steps=1,
             precision=GPU_PRECISION,
         )

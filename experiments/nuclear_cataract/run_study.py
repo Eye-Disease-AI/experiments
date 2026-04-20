@@ -71,7 +71,8 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         datamodule.batch_size = best_params["batch_size"]
         datamodule.setup(stage="fit")
         model_params = {k: v for k, v in best_params.items() if k != "batch_size"}
-        best_model = ModelClass(datamodule.dataset.n_classes, **model_params)
+        class_weights = datamodule.train_class_weights
+        best_model = ModelClass(datamodule.dataset.n_classes, **model_params, class_weights=class_weights)
 
         freeze_cb = BackboneFreezeCallback(monitor=OPTUNA_METRIC, patience=BACKBONE_UNFREEZE_PATIENCE, mode=OPTUNA_DIRECTION)
         trainer = L.Trainer(
@@ -79,6 +80,7 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
             accelerator="auto",
             enable_progress_bar=True,
             enable_model_summary=False,
+            enable_checkpointing=False,
             callbacks=[freeze_cb],
             logger=MLFlowLogger(run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()),
             precision=GPU_PRECISION,

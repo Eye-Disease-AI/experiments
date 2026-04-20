@@ -202,6 +202,17 @@ class MyDataModule(L.LightningDataModule):
             torch.utils.data.Subset(dataset, pkgs_to_indices(val_pkgs))
         )
 
+    @property
+    def train_class_weights(self) -> torch.Tensor:
+        indices = self.train_set.subset.indices
+        n_classes = self.dataset.n_classes
+        counts = torch.zeros(n_classes)
+        for i in indices:
+            label = self.dataset.annotations[i][1]
+            counts[label] += 1
+        N = counts.sum()
+        return N / (n_classes * counts)
+
     def train_dataloader(self):
         return self.dataLoaderCommon(self.train_set)
     def val_dataloader(self):

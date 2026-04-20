@@ -6,17 +6,19 @@ import lightning as L
 import mlflow
 import pandas as pd
 from torchmetrics import MetricCollection
-from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC
+from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC, MulticlassF1Score
 from ..common_config import BACKBONE_LR_FACTOR, OPTIMIZER
 
 
 class ModelBase(L.LightningModule):
-    def __init__(self, n_classes: int):
+    def __init__(self, n_classes: int, class_weights: torch.Tensor | None = None):
         super().__init__()
+        self.loss_fn = nn.CrossEntropyLoss(weight=class_weights)
         self.val_metrics = MetricCollection({
             "val_precision": MulticlassPrecision(num_classes=n_classes, average='macro'),
             "val_recall":    MulticlassRecall(num_classes=n_classes, average='macro'),
             "val_auroc":     MulticlassAUROC(num_classes=n_classes, average='macro'),
+            "val_f1":        MulticlassF1Score(num_classes=n_classes, average='macro')
         })
         self._val_probs: list[torch.Tensor] = []
         self._val_targets: list[torch.Tensor] = []

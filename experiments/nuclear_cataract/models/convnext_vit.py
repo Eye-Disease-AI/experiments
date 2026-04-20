@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from .base import ModelBase
-from ..common_config import LOSS_FN
 
 
 class ConvNextViT(ModelBase):
@@ -12,8 +11,8 @@ class ConvNextViT(ModelBase):
     Instead of tokenizing 16x16 pixel patches we use features extracted by cnn.
     """
 
-    def __init__(self, n_classes: int, lr: float = 1e-3, weight_decay: float = 1e-4, dropout: float = 0.2):
-        super().__init__(n_classes)
+    def __init__(self, n_classes: int, lr: float = 1e-3, weight_decay: float = 1e-4, dropout: float = 0.2, class_weights: torch.Tensor | None = None):
+        super().__init__(n_classes, class_weights=class_weights)
         self.save_hyperparameters()
 
         backbone = torchvision.models.convnext_base(weights='IMAGENET1K_V1')
@@ -51,7 +50,6 @@ class ConvNextViT(ModelBase):
             nn.Dropout(dropout),
             nn.Linear(vit_channels, n_classes),
         )
-        self.loss_fn = LOSS_FN()
 
     def backbone_modules(self):
         return [self.features, self.encoder]
