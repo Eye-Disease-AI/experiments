@@ -12,7 +12,7 @@ from optuna.visualization.matplotlib import (
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
 from .objective import objective, BackboneFreezeCallback
-from .common_config import SEED, EPOCHS, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
+from .common_config import SEED, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
 
 
 def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule: L.LightningDataModule):

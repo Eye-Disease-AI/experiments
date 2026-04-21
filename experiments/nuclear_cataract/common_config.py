@@ -1,7 +1,7 @@
 import torch
 
 SEED = 2137
-EXPERIMENT_NAME = "nuclear-cataract-baseline_v4"
+EXPERIMENT_NAME = "nuclear-cataract-baseline_v5"
 
 EPOCHS = 100
 MAX_TRIALS = 20
