@@ -158,7 +158,7 @@ class MyDataModule(L.LightningDataModule):
 
         self.transform = transformsv2.Compose([
             transformsv2.ConvertImageDtype(),
- #           transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
+            transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
             transformsv2.RandomHorizontalFlip(0.5),
             transformsv2.RandomRotation(15),
             transformsv2.CenterCrop((self.image_size, self.image_size)),
@@ -167,7 +167,7 @@ class MyDataModule(L.LightningDataModule):
         self.val_transform = transformsv2.Compose([
             transformsv2.Resize((self.image_size, self.image_size)),
             transformsv2.ConvertImageDtype(),
- #           transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
+            transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
         ])
 
         if not hasattr(self, 'train_set'):
@@ -259,3 +259,19 @@ if __name__ == "__main__":
     print_ratio("train", datamodule.train_set)
     print_ratio("val", datamodule.val_set)
     print_ratio("test", datamodule.test_set)
+
+    # Dataset normalization stats
+    all_splits = MyDataset(DATASET_PATH, cache=True, cache_size=224)
+    channel_sum = torch.zeros(3, dtype=torch.float64)
+    channel_sum_sq = torch.zeros(3, dtype=torch.float64)
+    n_pixels = 0
+    for img, _ in all_splits:
+        img = img.double() / 255.0 if img.dtype == torch.uint8 else img.double()
+        c, h, w = img.shape
+        channel_sum += img.sum(dim=[1, 2])
+        channel_sum_sq += (img ** 2).sum(dim=[1, 2])
+        n_pixels += h * w
+    mean = channel_sum / n_pixels
+    std = (channel_sum_sq / n_pixels - mean ** 2).sqrt()
+    print(f"NORMALIZE_MEAN = {[round(v, 6) for v in mean.tolist()]}")
+    print(f"NORMALIZE_STD  = {[round(v, 6) for v in std.tolist()]}")

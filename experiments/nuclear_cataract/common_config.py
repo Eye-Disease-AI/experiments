@@ -11,8 +11,9 @@ BACKBONE_LR_FACTOR = 0.1
 OPTUNA_METRIC = "val_f1"
 OPTUNA_DIRECTION = "max"  # "min" or "max"
 
-NORMALIZE_MEAN = [0.485, 0.456, 0.406]  # ImageNet
-NORMALIZE_STD  = [0.229, 0.224, 0.225]  # ImageNet
+# calculated from nuclear_cataract dataset
+NORMALIZE_MEAN = [0.229015, 0.1663, 0.106812]
+NORMALIZE_STD  = [0.281245, 0.243682, 0.220464]
 MSE_THRESHOLD = 0.0001
 LOG_EVERY_N_EPOCHS = 1
 GPU_PRECISION = 'bf16-mixed'
