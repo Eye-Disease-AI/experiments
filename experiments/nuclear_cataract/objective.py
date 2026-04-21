@@ -1,4 +1,5 @@
 import time
+import torch
 import optuna
 import mlflow
 import lightning as L
@@ -91,7 +92,8 @@ class BackboneFreezeCallback(Callback):
                 for cb in trainer.callbacks:
                     if isinstance(cb, EarlyStopping):
                         cb.wait_count = 0
-                        cb.best_score = None
+                        torch_inf = torch.tensor(torch.inf)
+                        cb.best_score = torch_inf if cb.monitor_op == torch.lt else -torch_inf
 
 
 def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial, ModelClass):
