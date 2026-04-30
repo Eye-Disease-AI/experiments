@@ -14,7 +14,7 @@ class ConvNext(ModelBase):
         new_clf.append(nn.LazyLinear(n_classes))
         self.model.classifier = nn.Sequential(*new_clf)
 
-    def backbone_modules(self):
+    def backbone_modules(self) -> list[nn.Module]:
         return [self.model.features]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from torchmetrics import MetricCollection
 from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC, MulticlassF1Score, MulticlassConfusionMatrix
-from ..common_config import BACKBONE_LR_FACTOR, OPTIMIZER
+from common_config import BACKBONE_LR_FACTOR, OPTIMIZER
 
 
 class ModelBase(L.LightningModule):
@@ -25,8 +25,6 @@ class ModelBase(L.LightningModule):
         })
         self._val_probs: list[torch.Tensor] = []
         self._val_targets: list[torch.Tensor] = []
-        self._last_all_probs: torch.Tensor | None = None
-        self._last_all_targets: torch.Tensor | None = None
 
     def training_step(self, batch, batch_idx):
         x, y = batch
@@ -93,6 +91,6 @@ class ModelBase(L.LightningModule):
         backbone_params = [p for p in self.parameters() if id(p) in backbone_ids]
         head_params     = [p for p in self.parameters() if id(p) not in backbone_ids]
         return OPTIMIZER([
-            {"params": head_params,     "lr": self.hparams.lr},
-            {"params": backbone_params, "lr": self.hparams.lr * BACKBONE_LR_FACTOR},
-        ], weight_decay=self.hparams.weight_decay)
+            {"params": head_params,     "lr": self.hparams.lr}, # pyright: ignore
+            {"params": backbone_params, "lr": self.hparams.lr * BACKBONE_LR_FACTOR}, # pyright: ignore
+        ], weight_decay=self.hparams.weight_decay) # pyright: ignore

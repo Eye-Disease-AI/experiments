@@ -9,8 +9,8 @@ from optuna.visualization.matplotlib import (
     plot_optimization_history,
     plot_param_importances,
 )
-from lib.mlflow_setup import Experiment, save_model
-from lib.seed import RNG
+from mlflow_setup import Experiment, save_model
+from seed import RNG
 from .objective import objective, BackboneFreezeCallback
 from .common_config import SEED, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
 
@@ -43,7 +43,7 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         return
 
     study.optimize(
-        lambda trial: objective(datamodule, rng, exp, trial, ModelClass),
+        lambda trial: objective(datamodule, rng, exp, trial, ModelClass), # pyright: ignore
         n_trials=MAX_TRIALS * 2,
         callbacks=[
             MaxTrialsCallback(MAX_TRIALS, states=(TrialState.COMPLETE, TrialState.PRUNED))
@@ -59,19 +59,19 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
     try:
         best_trial = study.best_trial
         mlflow.log_params(best_trial.params)
-        mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value)
+        mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value) # pyright: ignore
         mlflow.set_tag("best_trial_number", best_trial.number)
         agg = min if OPTUNA_DIRECTION == "min" else max
-        best_epoch = agg(best_trial.intermediate_values, key=best_trial.intermediate_values.get)
+        best_epoch = agg(best_trial.intermediate_values, key=best_trial.intermediate_values.get) # pyright: ignore
         mlflow.log_metric("best_epoch", best_epoch)
 
         best_params = study.best_params
         rng.set_seed(SEED)
-        datamodule.batch_size = best_params["batch_size"]
+        datamodule.batch_size = best_params["batch_size"] # pyright: ignore
         datamodule.setup(stage="fit")
         model_params = {k: v for k, v in best_params.items() if k != "batch_size"}
-        class_weights = datamodule.train_class_weights
-        best_model = ModelClass(datamodule.dataset.n_classes, **model_params, class_weights=class_weights)
+        class_weights = datamodule.train_class_weights # pyright: ignore
+        best_model = ModelClass(datamodule.dataset.n_classes, **model_params, class_weights=class_weights) # pyright: ignore
 
         freeze_cb = BackboneFreezeCallback(monitor=OPTUNA_METRIC, patience=BACKBONE_UNFREEZE_PATIENCE, mode=OPTUNA_DIRECTION)
         trainer = L.Trainer(

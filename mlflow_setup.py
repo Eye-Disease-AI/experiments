@@ -11,7 +11,7 @@ from urllib.parse import quote_plus
 class Experiment():
     def __init__(self, experiment_name):
         self.experiment_name = experiment_name
-        self.study: optuna.study.Study = None
+        self.study: optuna.study.Study | None = None
 
         load_dotenv()
         self.init_server_data()
@@ -37,8 +37,6 @@ class Experiment():
         self.OPTUNA_DB_URL = f"postgresql://{self.DB_USER}:{encoded_password}@{self.DB_HOST}:{self.DB_PORT}/optuna"
         self.MLFLOW_URI = f'http://{os.environ.get("MLFLOW_IP", "localhost")}:{os.environ.get("MLFLOW_PORT", "5000")}'
         self.experiment_name = self.experiment_name
-        self.client = None
-        self.storage = None
 
     def connect(self):
         mlflow.set_tracking_uri(self.MLFLOW_URI)

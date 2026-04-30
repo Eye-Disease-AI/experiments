@@ -6,7 +6,6 @@ import os
 
 class RNG():
     def __init__(self):
-        self.seed = None
         pass
 
     def is_deterministic(self):
@@ -23,7 +22,7 @@ class RNG():
         torch.use_deterministic_algorithms(True)
         os.environ["PYTHONHASHSEED"] = str(seed)
 
-    def disable_determinism():
+    def disable_determinism(self):
         torch.seed()
         torch.cuda.seed_all()
         random.seed()

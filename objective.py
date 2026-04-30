@@ -6,10 +6,10 @@ import lightning as L
 from lightning.pytorch.loggers import MLFlowLogger
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lib.seed import RNG
-from lib.mlflow_setup import Experiment
-from .models.convnext import ConvNext
-from .common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
+from seed import RNG
+from mlflow_setup import Experiment
+from convnext import ConvNext
+from common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
 from log_silencer import stop_logs
 stop_logs()
 
@@ -28,11 +28,11 @@ class OptunaMLflowCallback(Callback):
         if self.buffer:
             self.exp.client.log_batch(
                 self.run_id,
-                metrics=[mlflow.entities.Metric(OPTUNA_METRIC, l, ts, e) for e, l, ts in self.buffer],
+                metrics=[mlflow.entities.Metric(OPTUNA_METRIC, l, ts, e) for e, l, ts in self.buffer], # pyright: ignore
             )
             self.buffer.clear()
 
-    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningDataModule):
+    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
         metric_val = trainer.callback_metrics.get(OPTUNA_METRIC)
         if metric_val is None:
             return
@@ -51,7 +51,7 @@ class OptunaMLflowCallback(Callback):
             self._flush()
             raise optuna.TrialPruned()
 
-    def on_train_end(self, trainer: L.Trainer, pl_module: L.LightningDataModule):
+    def on_train_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
         self._flush()
 
 
@@ -66,7 +66,7 @@ class BackboneFreezeCallback(Callback):
         self._unfrozen = False
 
     def on_fit_start(self, trainer: L.Trainer, pl_module: L.LightningModule):
-        for m in pl_module.backbone_modules():
+        for m in pl_module.backbone_modules(): # pyright: ignore
             for p in m.parameters():
                 p.requires_grad = False
 
@@ -84,12 +84,12 @@ class BackboneFreezeCallback(Callback):
         else:
             self._wait += 1
             if self._wait >= self.patience:
-                for m in pl_module.backbone_modules():
+                for m in pl_module.backbone_modules(): # pyright: ignore
                     for p in m.parameters():
                         p.requires_grad = True
                 self._unfrozen = True
                 # reset early stopping patience after unfreezing
-                for cb in trainer.callbacks:
+                for cb in trainer.callbacks: # pyright: ignore
                     if isinstance(cb, EarlyStopping):
                         cb.wait_count = 0
                         torch_inf = torch.tensor(torch.inf)
@@ -104,14 +104,14 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
     dropout      = trial.suggest_float("dropout",      0.0,  0.5)
     batch_size   = trial.suggest_categorical("batch_size", [64])
 
-    datamodule.batch_size = batch_size
+    datamodule.batch_size = batch_size # pyright: ignore
     datamodule.setup(stage="fit")
-    class_weights = datamodule.train_class_weights
-    model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout, class_weights=class_weights)
+    class_weights = datamodule.train_class_weights # pyright: ignore
+    model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout, class_weights=class_weights) # pyright: ignore
 
     with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
         trial.set_user_attr("mlflow_run_id", run.info.run_id)
-        mlflow.set_tag("optuna_study", exp.study.study_name)
+        mlflow.set_tag("optuna_study", exp.study.study_name) # pyright: ignore
         mlflow.set_tag("optuna_trial", trial.number)
         mlflow.log_params({"lr": lr, "weight_decay": weight_decay, "dropout": dropout, "batch_size": batch_size, "seed": SEED, "model": str(model)})
 
@@ -138,4 +138,5 @@ def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, tria
         )
 
         trainer.fit(model, datamodule=datamodule)
+
         return pruning_cb.best_value

@@ -1,6 +1,6 @@
 import numpy as np
 import mlflow
-from lib.mlflow_setup import Experiment
+from mlflow_setup import Experiment
 from scipy import stats
 import argparse
 
@@ -8,7 +8,7 @@ import argparse
 def get_trial_vals(exp: Experiment, study_name: str, metric_name: str = 'val_acc') -> list[float]:
     mlflow_exp = exp.client.get_experiment_by_name(exp.experiment_name)
     runs = exp.client.search_runs(
-        experiment_ids=[mlflow_exp.experiment_id],
+        experiment_ids=[mlflow_exp.experiment_id], # pyright: ignore
         filter_string=f"tags.optuna_study = '{study_name}'",
     )
     return [
@@ -65,17 +65,17 @@ if __name__ == "__main__":
         print("No completed trials found.")
     else:
         ci = bootstrap_ci(losses)
-    rows = [
-        ("Values:",            f"{[f'{x:.4f}' for x in losses[:10]]}..."),
-        ("Trials:",            f"{ci['n']}"),
-        ("Mean val_acc:",      f"{ci['mean']:.4f}"),
-        ("Median:",            f"{ci['median']:.4f}"),
-        ("Std:",               f"{ci['std']:.4f}"),
-        ("Bootstrap 95% CI:", f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]"),
-        ("Z-score 95% CI:",   f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]"),
-        ("T-student 95% CI:", f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]"),
-    ]
+        rows = [
+            ("Values:",            f"{[f'{x:.4f}' for x in losses[:10]]}..."),
+            ("Trials:",            f"{ci['n']}"),
+            ("Mean val_acc:",      f"{ci['mean']:.4f}"),
+            ("Median:",            f"{ci['median']:.4f}"),
+            ("Std:",               f"{ci['std']:.4f}"),
+            ("Bootstrap 95% CI:", f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]"),
+            ("Z-score 95% CI:",   f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]"),
+            ("T-student 95% CI:", f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]"),
+        ]
 
-    w = max(len(r[0]) for r in rows)
-    for label, value in rows:
-        print(f"{label:{w}}  {value}")
+        w = max(len(r[0]) for r in rows)
+        for label, value in rows:
+            print(f"{label:{w}}  {value}")

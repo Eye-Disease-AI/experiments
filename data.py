@@ -1,5 +1,5 @@
-from lib.seed import RNG
-from experiments.nuclear_cataract.common_config import NORMALIZE_MEAN, NORMALIZE_STD
+from seed import RNG
+from common_config import NORMALIZE_MEAN, NORMALIZE_STD
 import lightning as L
 import os
 import torchvision
@@ -145,7 +145,7 @@ class MyDataModule(L.LightningDataModule):
         else:
             print(f"Dataset already exists at {DATASET_PATH}")
 
-    def setup(self, stage: str = None):
+    def setup(self, stage: str | None = None):
         max_angle = 15
         max_rad = math.radians(max_angle)
         pre_rot_size = int(math.ceil(self.image_size * (math.sin(max_rad) + math.cos(max_rad))))
@@ -160,7 +160,7 @@ class MyDataModule(L.LightningDataModule):
             transformsv2.ConvertImageDtype(),
             transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
             transformsv2.RandomHorizontalFlip(0.5),
-            transformsv2.RandomRotation(15),
+            transformsv2.RandomRotation(15), # pyright: ignore
             transformsv2.CenterCrop((self.image_size, self.image_size)),
             transformsv2.GaussianNoise(mean=0, sigma=0.01)
         ])
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     channel_sum = torch.zeros(3, dtype=torch.float64)
     channel_sum_sq = torch.zeros(3, dtype=torch.float64)
     n_pixels = 0
-    for img, _ in all_splits:
+    for img, _ in all_splits: # pyright: ignore
         img = img.double() / 255.0 if img.dtype == torch.uint8 else img.double()
         c, h, w = img.shape
         channel_sum += img.sum(dim=[1, 2])

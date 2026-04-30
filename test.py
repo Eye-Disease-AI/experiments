@@ -1,9 +1,9 @@
-from experiments.nuclear_cataract.common_config import *
-from experiments.nuclear_cataract.run_study import run_study
-from experiments.nuclear_cataract.models.convnext_vit import ConvNextViT
-from experiments.nuclear_cataract.data import MyDataModule
-from lib.mlflow_setup import Experiment
-from lib.seed import RNG
+from common_config import *
+from run_study import run_study
+from convnext import ConvNext
+from data import MyDataModule
+from mlflow_setup import Experiment
+from seed import RNG
 EXPERIMENT_NAME="test"
 STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search5"
 
@@ -16,4 +16,4 @@ datamodule.prepare_data()
 
 EPOCHS = 5
 MAX_TRIALS = 3
-run_study(ConvNextViT, STUDY_NAME, exp, rng, datamodule)
+run_study(ConvNext, STUDY_NAME, exp, rng, datamodule)
