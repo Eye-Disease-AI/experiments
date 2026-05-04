@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from torchmetrics import MetricCollection
 from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC, MulticlassF1Score, MulticlassConfusionMatrix
-from common_config import BACKBONE_LR_FACTOR, OPTIMIZER
+from experiment.common_config import BACKBONE_LR_FACTOR, OPTIMIZER
 
 
 class ModelBase(L.LightningModule):

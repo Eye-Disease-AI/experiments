@@ -78,5 +78,5 @@ def save_model(model, example_input=None):
             input_example=example_input,
         )
         mlflow.set_tag("model_serialization_format", "pt2")
-    except Exception as e:
+    except Exception:
         _save_as_torchscript()

@@ -1,6 +1,6 @@
 import numpy as np
 import mlflow
-from mlflow_setup import Experiment
+from lib.mlflow_setup import Experiment
 from scipy import stats
 import argparse
 

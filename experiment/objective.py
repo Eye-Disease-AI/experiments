@@ -6,11 +6,10 @@ import lightning as L
 from lightning.pytorch.loggers import MLFlowLogger
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from seed import RNG
-from mlflow_setup import Experiment
-from convnext import ConvNext
-from common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
-from log_silencer import stop_logs
+from lib.seed import RNG
+from lib.mlflow_setup import Experiment
+from experiment.common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
+from lib.log_silencer import stop_logs
 stop_logs()
 
 
@@ -28,7 +27,7 @@ class OptunaMLflowCallback(Callback):
         if self.buffer:
             self.exp.client.log_batch(
                 self.run_id,
-                metrics=[mlflow.entities.Metric(OPTUNA_METRIC, l, ts, e) for e, l, ts in self.buffer], # pyright: ignore
+                metrics=[mlflow.entities.Metric(OPTUNA_METRIC, val, ts, e) for e, val, ts in self.buffer], # pyright: ignore
             )
             self.buffer.clear()
 

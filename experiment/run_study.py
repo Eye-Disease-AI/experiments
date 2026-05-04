@@ -9,10 +9,10 @@ from optuna.visualization.matplotlib import (
     plot_optimization_history,
     plot_param_importances,
 )
-from mlflow_setup import Experiment, save_model
-from seed import RNG
-from objective import objective, BackboneFreezeCallback
-from common_config import SEED, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
+from lib.mlflow_setup import Experiment, save_model
+from lib.seed import RNG
+from experiment.objective import objective, BackboneFreezeCallback
+from experiment.common_config import SEED, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
 
 
 def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule: L.LightningDataModule):

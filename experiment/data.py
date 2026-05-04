@@ -1,5 +1,5 @@
-from seed import RNG
-from common_config import NORMALIZE_MEAN, NORMALIZE_STD
+from lib.seed import RNG
+from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD
 import lightning as L
 import os
 import torchvision
@@ -10,7 +10,6 @@ from requests.auth import HTTPBasicAuth
 from getpass import getpass
 import zipfile
 import shutil
-from multiprocessing import cpu_count
 import math
 import json
 import random
@@ -254,8 +253,8 @@ if __name__ == "__main__":
     print("Positive cases:")
     def print_ratio(name, set):
         p = sum([d[1] for d in set])
-        l = len(set)
-        print(f"{name}: {p}/{l}={p/l*100:.4}%")
+        set_len = len(set)
+        print(f"{name}: {p}/{set_len}={p/set_len*100:.4}%")
     print_ratio("train", datamodule.train_set)
     print_ratio("val", datamodule.val_set)
     print_ratio("test", datamodule.test_set)
