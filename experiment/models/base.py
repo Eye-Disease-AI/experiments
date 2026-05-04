@@ -1,14 +1,22 @@
 import os
 import tempfile
-import torch
-import torch.nn as nn
+
 import lightning as L
+import matplotlib.pyplot as plt
 import mlflow
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
+import torch.nn as nn
 from torchmetrics import MetricCollection
-from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassAUROC, MulticlassF1Score, MulticlassConfusionMatrix
+from torchmetrics.classification import (
+    MulticlassAUROC,
+    MulticlassConfusionMatrix,
+    MulticlassF1Score,
+    MulticlassPrecision,
+    MulticlassRecall,
+)
+
 from experiment.common_config import BACKBONE_LR_FACTOR, OPTIMIZER
 
 
@@ -17,12 +25,16 @@ class ModelBase(L.LightningModule):
         super().__init__()
         self.loss_fn = nn.CrossEntropyLoss(weight=class_weights)
         self._n_classes = n_classes
-        self.val_metrics = MetricCollection({
-            "val_precision": MulticlassPrecision(num_classes=n_classes, average='macro'),
-            "val_recall":    MulticlassRecall(num_classes=n_classes, average='macro'),
-            "val_auroc":     MulticlassAUROC(num_classes=n_classes, average='macro'),
-            "val_f1":        MulticlassF1Score(num_classes=n_classes, average='macro')
-        })
+        self.val_metrics = MetricCollection(
+            {
+                "val_precision": MulticlassPrecision(
+                    num_classes=n_classes, average="macro"
+                ),
+                "val_recall": MulticlassRecall(num_classes=n_classes, average="macro"),
+                "val_auroc": MulticlassAUROC(num_classes=n_classes, average="macro"),
+                "val_f1": MulticlassF1Score(num_classes=n_classes, average="macro"),
+            }
+        )
         self._val_probs: list[torch.Tensor] = []
         self._val_targets: list[torch.Tensor] = []
 
@@ -43,8 +55,8 @@ class ModelBase(L.LightningModule):
         self._val_targets.append(y.detach().cpu())
 
     def on_validation_epoch_end(self):
-        all_probs = torch.cat(self._val_probs).to(self.device)     # [N, n_classes]
-        all_targets = torch.cat(self._val_targets).to(self.device) # [N]
+        all_probs = torch.cat(self._val_probs).to(self.device)  # [N, n_classes]
+        all_targets = torch.cat(self._val_targets).to(self.device)  # [N]
         self._val_probs.clear()
         self._val_targets.clear()
 
@@ -63,19 +75,26 @@ class ModelBase(L.LightningModule):
         cm = MulticlassConfusionMatrix(num_classes=self._n_classes).to(self.device)
         cm_matrix = cm(all_probs, all_targets).cpu().numpy()
         fig, ax = plt.subplots(figsize=(self._n_classes * 2, self._n_classes * 2))
-        sns.heatmap(cm_matrix, annot=True, fmt='d', ax=ax, cmap='Blues')
-        ax.set_xlabel('Predicted')
-        ax.set_ylabel('True')
+        sns.heatmap(cm_matrix, annot=True, fmt="d", ax=ax, cmap="Blues")
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
         mlflow.log_figure(fig, "confusion_matrix.png")
         plt.close(fig)
 
         all_preds = all_probs.argmax(dim=1)
-        df = pd.DataFrame({
-            "true_label": all_targets.cpu().numpy(),
-            "predicted_label": all_preds.cpu().numpy(),
-            **{f"prob_class_{i}": all_probs[:, i].cpu().numpy() for i in range(all_probs.shape[1])},
-        })
-        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w", prefix="val_predictions_") as f:
+        df = pd.DataFrame(
+            {
+                "true_label": all_targets.cpu().numpy(),
+                "predicted_label": all_preds.cpu().numpy(),
+                **{
+                    f"prob_class_{i}": all_probs[:, i].cpu().numpy()
+                    for i in range(all_probs.shape[1])
+                },
+            }
+        )
+        with tempfile.NamedTemporaryFile(
+            suffix=".csv", delete=False, mode="w", prefix="val_predictions_"
+        ) as f:
             df.to_csv(f, index=True, index_label="sample_idx")
             tmppath = f.name
         try:
@@ -89,8 +108,11 @@ class ModelBase(L.LightningModule):
     def configure_optimizers(self):
         backbone_ids = {id(p) for m in self.backbone_modules() for p in m.parameters()}
         backbone_params = [p for p in self.parameters() if id(p) in backbone_ids]
-        head_params     = [p for p in self.parameters() if id(p) not in backbone_ids]
-        return OPTIMIZER([
-            {"params": head_params,     "lr": self.hparams.lr}, # pyright: ignore
-            {"params": backbone_params, "lr": self.hparams.lr * BACKBONE_LR_FACTOR}, # pyright: ignore
-        ], weight_decay=self.hparams.weight_decay) # pyright: ignore
+        head_params = [p for p in self.parameters() if id(p) not in backbone_ids]
+        return OPTIMIZER(
+            [
+                {"params": head_params, "lr": self.hparams.lr},  # pyright: ignore
+                {"params": backbone_params, "lr": self.hparams.lr * BACKBONE_LR_FACTOR},  # pyright: ignore
+            ],
+            weight_decay=self.hparams.weight_decay,
+        )  # pyright: ignore

@@ -1,16 +1,17 @@
-import torch
-import random
-import numpy
 import os
+import random
+
+import numpy
+import torch
 
 
-class RNG():
+class RNG:
     def __init__(self):
         pass
 
     def is_deterministic(self):
         return self.seed is not None
-    
+
     def set_seed(self, seed):
         self.seed = seed
         torch.manual_seed(seed)
@@ -26,7 +27,7 @@ class RNG():
         torch.seed()
         torch.cuda.seed_all()
         random.seed()
-        numpy.random.seed(None)  
+        numpy.random.seed(None)
         os.environ.pop("PYTHONHASHSEED", None)
         torch.use_deterministic_algorithms(False)
         torch.backends.cudnn.deterministic = False

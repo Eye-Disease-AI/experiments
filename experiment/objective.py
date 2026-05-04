@@ -1,21 +1,40 @@
 import time
-import torch
-import optuna
-import mlflow
+
 import lightning as L
-from lightning.pytorch.loggers import MLFlowLogger
+import mlflow
+import optuna
+import torch
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lib.seed import RNG
-from lib.mlflow_setup import Experiment
-from experiment.common_config import SEED, EPOCHS, LOG_EVERY_N_EPOCHS, GPU_PRECISION, EARLY_STOPPING_PATIENCE, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
+from lightning.pytorch.loggers import MLFlowLogger
+
+from experiment.common_config import (
+    BACKBONE_UNFREEZE_PATIENCE,
+    EARLY_STOPPING_PATIENCE,
+    EPOCHS,
+    GPU_PRECISION,
+    LOG_EVERY_N_EPOCHS,
+    OPTUNA_DIRECTION,
+    OPTUNA_METRIC,
+    SEED,
+)
 from lib.log_silencer import stop_logs
+from lib.mlflow_setup import Experiment
+from lib.seed import RNG
+
 stop_logs()
 
 
 class OptunaMLflowCallback(Callback):
     """Reports val_loss to Optuna each epoch and handles pruning + batched MLflow logging."""
-    def __init__(self, trial: optuna.trial.Trial, exp: Experiment, run_id: str, log_every_n_epochs: int):
+
+    def __init__(
+        self,
+        trial: optuna.trial.Trial,
+        exp: Experiment,
+        run_id: str,
+        log_every_n_epochs: int,
+    ):
         self.trial = trial
         self.exp = exp
         self.run_id = run_id
@@ -27,7 +46,10 @@ class OptunaMLflowCallback(Callback):
         if self.buffer:
             self.exp.client.log_batch(
                 self.run_id,
-                metrics=[mlflow.entities.Metric(OPTUNA_METRIC, val, ts, e) for e, val, ts in self.buffer], # pyright: ignore
+                metrics=[
+                    mlflow.entities.Metric(OPTUNA_METRIC, val, ts, e)
+                    for e, val, ts in self.buffer
+                ],  # pyright: ignore
             )
             self.buffer.clear()
 
@@ -56,6 +78,7 @@ class OptunaMLflowCallback(Callback):
 
 class BackboneFreezeCallback(Callback):
     """Freezes backbone at start; unfreezes it once the metric stops improving."""
+
     def __init__(self, monitor: str, patience: int, mode: str):
         self.monitor = monitor
         self.patience = patience
@@ -65,7 +88,7 @@ class BackboneFreezeCallback(Callback):
         self._unfrozen = False
 
     def on_fit_start(self, trainer: L.Trainer, pl_module: L.LightningModule):
-        for m in pl_module.backbone_modules(): # pyright: ignore
+        for m in pl_module.backbone_modules():  # pyright: ignore
             for p in m.parameters():
                 p.requires_grad = False
 
@@ -76,53 +99,88 @@ class BackboneFreezeCallback(Callback):
         if val is None:
             return
         v = val.item()
-        improved = self._best is None or (v < self._best if self.mode == "min" else v > self._best)
+        improved = self._best is None or (
+            v < self._best if self.mode == "min" else v > self._best
+        )
         if improved:
             self._best = v
             self._wait = 0
         else:
             self._wait += 1
             if self._wait >= self.patience:
-                for m in pl_module.backbone_modules(): # pyright: ignore
+                for m in pl_module.backbone_modules():  # pyright: ignore
                     for p in m.parameters():
                         p.requires_grad = True
                 self._unfrozen = True
                 # reset early stopping patience after unfreezing
-                for cb in trainer.callbacks: # pyright: ignore
+                for cb in trainer.callbacks:  # pyright: ignore
                     if isinstance(cb, EarlyStopping):
                         cb.wait_count = 0
                         torch_inf = torch.tensor(torch.inf)
-                        cb.best_score = torch_inf if cb.monitor_op == torch.lt else -torch_inf
+                        cb.best_score = (
+                            torch_inf if cb.monitor_op == torch.lt else -torch_inf
+                        )
 
 
-def objective(datamodule: L.LightningDataModule, rng: RNG, exp: Experiment, trial: optuna.trial.Trial, ModelClass):
+def objective(
+    datamodule: L.LightningDataModule,
+    rng: RNG,
+    exp: Experiment,
+    trial: optuna.trial.Trial,
+    ModelClass,
+):
     rng.set_seed(SEED)
 
-    lr           = trial.suggest_float("lr",           1e-5, 1e-3, log=True)
+    lr = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
-    dropout      = trial.suggest_float("dropout",      0.0,  0.5)
-    batch_size   = trial.suggest_categorical("batch_size", [64])
+    dropout = trial.suggest_float("dropout", 0.0, 0.5)
+    batch_size = trial.suggest_categorical("batch_size", [64])
 
-    datamodule.batch_size = batch_size # pyright: ignore
+    datamodule.batch_size = batch_size  # pyright: ignore
     datamodule.setup(stage="fit")
-    class_weights = datamodule.train_class_weights # pyright: ignore
-    model = ModelClass(n_classes=datamodule.dataset.n_classes, lr=lr, weight_decay=weight_decay, dropout=dropout, class_weights=class_weights) # pyright: ignore
+    class_weights = datamodule.train_class_weights  # pyright: ignore
+    model = ModelClass(
+        n_classes=datamodule.dataset.n_classes,
+        lr=lr,
+        weight_decay=weight_decay,
+        dropout=dropout,
+        class_weights=class_weights,
+    )  # pyright: ignore
 
     with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
         trial.set_user_attr("mlflow_run_id", run.info.run_id)
-        mlflow.set_tag("optuna_study", exp.study.study_name) # pyright: ignore
+        mlflow.set_tag("optuna_study", exp.study.study_name)  # pyright: ignore
         mlflow.set_tag("optuna_trial", trial.number)
-        mlflow.log_params({"lr": lr, "weight_decay": weight_decay, "dropout": dropout, "batch_size": batch_size, "seed": SEED, "model": str(model)})
+        mlflow.log_params(
+            {
+                "lr": lr,
+                "weight_decay": weight_decay,
+                "dropout": dropout,
+                "batch_size": batch_size,
+                "seed": SEED,
+                "model": str(model),
+            }
+        )
 
-        mlf_logger = MLFlowLogger(run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri())
+        mlf_logger = MLFlowLogger(
+            run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
+        )
         pruning_cb = OptunaMLflowCallback(
             trial=trial,
             exp=exp,
             run_id=run.info.run_id,
             log_every_n_epochs=LOG_EVERY_N_EPOCHS,
         )
-        early_stop_cb = EarlyStopping(monitor=OPTUNA_METRIC, patience=EARLY_STOPPING_PATIENCE, mode=OPTUNA_DIRECTION)
-        freeze_cb = BackboneFreezeCallback(monitor=OPTUNA_METRIC, patience=BACKBONE_UNFREEZE_PATIENCE, mode=OPTUNA_DIRECTION)
+        early_stop_cb = EarlyStopping(
+            monitor=OPTUNA_METRIC,
+            patience=EARLY_STOPPING_PATIENCE,
+            mode=OPTUNA_DIRECTION,
+        )
+        freeze_cb = BackboneFreezeCallback(
+            monitor=OPTUNA_METRIC,
+            patience=BACKBONE_UNFREEZE_PATIENCE,
+            mode=OPTUNA_DIRECTION,
+        )
 
         trainer = L.Trainer(
             max_epochs=EPOCHS,

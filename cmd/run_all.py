@@ -1,18 +1,18 @@
 from experiment.common_config import EXPERIMENT_NAME, SEED
-from experiment.run_study import run_study
-from experiment.models.convnext import ConvNext
-from experiment.models.vit import ViT
-from experiment.models.swin import Swin
 from experiment.data import MyDataModule
+from experiment.models.convnext import ConvNext
+from experiment.models.swin import Swin
+from experiment.models.vit import ViT
+from experiment.run_study import run_study
 from lib.mlflow_setup import Experiment
 from lib.seed import RNG
 
-TRY=2
+TRY = 2
 
 MODELS = [
-    (ConvNext,    f"{EXPERIMENT_NAME}/convnext-search_{TRY}"),
-    (ViT,         f"{EXPERIMENT_NAME}/vit-search_{TRY}"),
-    (Swin,        f"{EXPERIMENT_NAME}/swin-search_{TRY}"),
+    (ConvNext, f"{EXPERIMENT_NAME}/convnext-search_{TRY}"),
+    (ViT, f"{EXPERIMENT_NAME}/vit-search_{TRY}"),
+    (Swin, f"{EXPERIMENT_NAME}/swin-search_{TRY}"),
 ]
 
 rng = RNG()
@@ -23,7 +23,7 @@ datamodule = MyDataModule(rng)
 datamodule.prepare_data()
 
 for ModelClass, study_name in MODELS:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Model: {ModelClass.__name__}, Study: {study_name}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
     run_study(ModelClass, study_name, exp, rng, datamodule)

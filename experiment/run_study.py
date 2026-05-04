@@ -1,21 +1,35 @@
-import optuna
-import mlflow
-import matplotlib.pyplot as plt
 import lightning as L
-from optuna.trial import TrialState
-from optuna.study import MaxTrialsCallback
+import matplotlib.pyplot as plt
+import mlflow
+import optuna
 from lightning.pytorch.loggers import MLFlowLogger
+from optuna.study import MaxTrialsCallback
+from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
     plot_optimization_history,
     plot_param_importances,
 )
+
+from experiment.common_config import (
+    BACKBONE_UNFREEZE_PATIENCE,
+    GPU_PRECISION,
+    MAX_TRIALS,
+    OPTUNA_DIRECTION,
+    OPTUNA_METRIC,
+    SEED,
+)
+from experiment.objective import BackboneFreezeCallback, objective
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
-from experiment.objective import objective, BackboneFreezeCallback
-from experiment.common_config import SEED, MAX_TRIALS, GPU_PRECISION, OPTUNA_METRIC, OPTUNA_DIRECTION, BACKBONE_UNFREEZE_PATIENCE
 
 
-def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule: L.LightningDataModule):
+def run_study(
+    ModelClass,
+    study_name: str,
+    exp: Experiment,
+    rng: RNG,
+    datamodule: L.LightningDataModule,
+):
     study = optuna.create_study(
         study_name=study_name,
         direction={"min": "minimize", "max": "maximize"}[OPTUNA_DIRECTION],
@@ -25,7 +39,9 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
     )
     exp.study = study
 
-    n_finished = sum(1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED))
+    n_finished = sum(
+        1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
+    )
     print(f"Study '{study_name}': {n_finished}/{MAX_TRIALS} finished trials.")
 
     parent_run_id = study.user_attrs.get("mlflow_parent_run_id")
@@ -38,15 +54,19 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
         mlflow.set_tag("model", ModelClass.__name__)
 
     if n_finished >= MAX_TRIALS:
-        print(f"Study already complete. Best: {study.best_params}, {OPTUNA_METRIC}: {study.best_value:.4f}")
+        print(
+            f"Study already complete. Best: {study.best_params}, {OPTUNA_METRIC}: {study.best_value:.4f}"
+        )
         mlflow.end_run()
         return
 
     study.optimize(
-        lambda trial: objective(datamodule, rng, exp, trial, ModelClass), # pyright: ignore
+        lambda trial: objective(datamodule, rng, exp, trial, ModelClass),  # pyright: ignore
         n_trials=MAX_TRIALS * 2,
         callbacks=[
-            MaxTrialsCallback(MAX_TRIALS, states=(TrialState.COMPLETE, TrialState.PRUNED))
+            MaxTrialsCallback(
+                MAX_TRIALS, states=(TrialState.COMPLETE, TrialState.PRUNED)
+            )
         ],
     )
 
@@ -59,21 +79,29 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
     try:
         best_trial = study.best_trial
         mlflow.log_params(best_trial.params)
-        mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value) # pyright: ignore
+        mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value)  # pyright: ignore
         mlflow.set_tag("best_trial_number", best_trial.number)
         agg = min if OPTUNA_DIRECTION == "min" else max
-        best_epoch = agg(best_trial.intermediate_values, key=best_trial.intermediate_values.get) # pyright: ignore
+        best_epoch = agg(
+            best_trial.intermediate_values, key=best_trial.intermediate_values.get
+        )  # pyright: ignore
         mlflow.log_metric("best_epoch", best_epoch)
 
         best_params = study.best_params
         rng.set_seed(SEED)
-        datamodule.batch_size = best_params["batch_size"] # pyright: ignore
+        datamodule.batch_size = best_params["batch_size"]  # pyright: ignore
         datamodule.setup(stage="fit")
         model_params = {k: v for k, v in best_params.items() if k != "batch_size"}
-        class_weights = datamodule.train_class_weights # pyright: ignore
-        best_model = ModelClass(datamodule.dataset.n_classes, **model_params, class_weights=class_weights) # pyright: ignore
+        class_weights = datamodule.train_class_weights  # pyright: ignore
+        best_model = ModelClass(
+            datamodule.dataset.n_classes, **model_params, class_weights=class_weights
+        )  # pyright: ignore
 
-        freeze_cb = BackboneFreezeCallback(monitor=OPTUNA_METRIC, patience=BACKBONE_UNFREEZE_PATIENCE, mode=OPTUNA_DIRECTION)
+        freeze_cb = BackboneFreezeCallback(
+            monitor=OPTUNA_METRIC,
+            patience=BACKBONE_UNFREEZE_PATIENCE,
+            mode=OPTUNA_DIRECTION,
+        )
         trainer = L.Trainer(
             max_epochs=best_epoch + 1,
             accelerator="auto",
@@ -81,7 +109,9 @@ def run_study(ModelClass, study_name: str, exp: Experiment, rng: RNG, datamodule
             enable_model_summary=False,
             enable_checkpointing=False,
             callbacks=[freeze_cb],
-            logger=MLFlowLogger(run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()),
+            logger=MLFlowLogger(
+                run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
+            ),
             precision=GPU_PRECISION,
         )
         trainer.fit(best_model, datamodule=datamodule)

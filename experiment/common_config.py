@@ -13,10 +13,10 @@ OPTUNA_DIRECTION = "max"  # "min" or "max"
 
 # calculated from nuclear_cataract dataset
 NORMALIZE_MEAN = [0.229015, 0.1663, 0.106812]
-NORMALIZE_STD  = [0.281245, 0.243682, 0.220464]
+NORMALIZE_STD = [0.281245, 0.243682, 0.220464]
 MSE_THRESHOLD = 0.0001
 LOG_EVERY_N_EPOCHS = 1
-GPU_PRECISION = 'bf16-mixed'
-OPTIMIZER= torch.optim.AdamW
+GPU_PRECISION = "bf16-mixed"
+OPTIMIZER = torch.optim.AdamW
 
-torch.set_float32_matmul_precision('medium')  # to use tensor cores on newer gpus
+torch.set_float32_matmul_precision("medium")  # to use tensor cores on newer gpus

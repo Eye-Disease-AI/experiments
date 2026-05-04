@@ -1,14 +1,16 @@
-import warnings
-import optuna
-import torch
-import mlflow
-import psycopg2
 import os
-from dotenv import load_dotenv
-from optuna.storages import RDBStorage
+import warnings
 from urllib.parse import quote_plus
 
-class Experiment():
+import mlflow
+import optuna
+import psycopg2
+import torch
+from dotenv import load_dotenv
+from optuna.storages import RDBStorage
+
+
+class Experiment:
     def __init__(self, experiment_name):
         self.experiment_name = experiment_name
         self.study: optuna.study.Study | None = None
@@ -26,8 +28,12 @@ class Experiment():
         print("Connection OK")
 
     def init_server_data(self):
-        self.MLFLOW_TRACKING_USERNAME = os.environ["MLFLOW_TRACKING_USERNAME"] = os.environ["MLFLOW_ADMIN_USERNAME"]
-        self.MLFLOW_TRACKING_PASSWORD =  os.environ["MLFLOW_TRACKING_PASSWORD"] = os.environ["MLFLOW_ADMIN_PASSWORD"]
+        self.MLFLOW_TRACKING_USERNAME = os.environ["MLFLOW_TRACKING_USERNAME"] = (
+            os.environ["MLFLOW_ADMIN_USERNAME"]
+        )
+        self.MLFLOW_TRACKING_PASSWORD = os.environ["MLFLOW_TRACKING_PASSWORD"] = (
+            os.environ["MLFLOW_ADMIN_PASSWORD"]
+        )
         self.DB_HOST = os.environ.get("POSTGRES_HOST", "localhost")
         self.DB_PORT = os.environ.get("POSTGRES_PORT", "5432")
         self.DB_USER = os.environ["POSTGRES_USER"]
@@ -35,7 +41,7 @@ class Experiment():
         self.DB_NAME = os.environ["POSTGRES_DB"]
         encoded_password = quote_plus(self.DB_PASSWORD)
         self.OPTUNA_DB_URL = f"postgresql://{self.DB_USER}:{encoded_password}@{self.DB_HOST}:{self.DB_PORT}/optuna"
-        self.MLFLOW_URI = f'http://{os.environ.get("MLFLOW_IP", "localhost")}:{os.environ.get("MLFLOW_PORT", "5000")}'
+        self.MLFLOW_URI = f"http://{os.environ.get('MLFLOW_IP', 'localhost')}:{os.environ.get('MLFLOW_PORT', '5000')}"
         self.experiment_name = self.experiment_name
 
     def connect(self):
@@ -44,8 +50,14 @@ class Experiment():
 
         self.client = mlflow.MlflowClient()
         self.storage = RDBStorage(url=self.OPTUNA_DB_URL)
-        
-        conn = psycopg2.connect(host=self.DB_HOST, port=self.DB_PORT, user=self.DB_USER, password=self.DB_PASSWORD, dbname=self.DB_NAME)
+
+        conn = psycopg2.connect(
+            host=self.DB_HOST,
+            port=self.DB_PORT,
+            user=self.DB_USER,
+            password=self.DB_PASSWORD,
+            dbname=self.DB_NAME,
+        )
         conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_database WHERE datname = 'optuna'")
@@ -54,11 +66,13 @@ class Experiment():
                 print("Created database 'optuna'.")
         conn.close()
 
+
 def save_model(model, example_input=None):
     print("saving model")
+
     def _save_as_torchscript():
         with warnings.catch_warnings():
-            #warnings.filterwarnings("ignore", category=UserWarning, module="mlflow.pytorch")
+            # warnings.filterwarnings("ignore", category=UserWarning, module="mlflow.pytorch")
             mlflow.pytorch.log_model(
                 torch.jit.script(model),
                 name="best_model",
