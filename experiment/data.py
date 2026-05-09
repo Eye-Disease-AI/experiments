@@ -98,6 +98,7 @@ class MyDataModule(L.LightningDataModule):
 
         if not hasattr(self, "train_set"):
             train = self.dataset.train_set()
+            self.train_class_weights = train.class_weights()
             val = self.dataset.val_set()
             test = self.test_dataset.test_set()
 
