@@ -138,6 +138,7 @@ def objective(
             enable_checkpointing=False,
             log_every_n_steps=1,
             precision=GPU_PRECISION,
+            deterministic=True,
         )
 
         trainer.fit(model, datamodule=datamodule)
