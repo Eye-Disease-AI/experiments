@@ -132,7 +132,7 @@ def objective(
             max_epochs=EPOCHS,
             accelerator="auto",
             logger=mlf_logger,
-            callbacks=[pruning_cb, early_stop_cb],
+            callbacks=[pruning_cb],
             enable_progress_bar=True,
             enable_model_summary=False,
             enable_checkpointing=False,
