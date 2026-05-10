@@ -107,7 +107,17 @@ class ModelBase(L.LightningModule):
         return []
 
     def configure_optimizers(self):
-        optimizer = OPTIMIZER(params=self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay, amsgrad=True)
+        backbone_ids = {id(p) for m in self.backbone_modules() for p in m.parameters()}
+        backbone_params = [p for p in self.parameters() if id(p) in backbone_ids]
+        head_params = [p for p in self.parameters() if id(p) not in backbone_ids]
+        optimizer = OPTIMIZER(
+            [
+                {"params": head_params, "lr": self.hparams.lr},  # pyright: ignore
+                {"params": backbone_params, "lr": self.hparams.lr * BACKBONE_LR_FACTOR},  # pyright: ignore
+            ],
+            weight_decay=self.hparams.weight_decay,
+            amsgrad=True,
+        )  # pyright: ignore
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
