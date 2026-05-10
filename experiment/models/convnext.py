@@ -19,7 +19,7 @@ class ConvNext(ModelBase):
         self.model = torchvision.models.convnext_tiny(weights="IMAGENET1K_V1")
         new_clf = list(self.model.classifier.children())[:-1]
         new_clf.append(nn.LazyLinear(n_classes))
-        new_clf.append(nn.Softmax(dim=1))
+        new_clf.append(nn.Dropout(dropout))
         self.model.classifier = nn.Sequential(*new_clf)
 
     def backbone_modules(self) -> list[nn.Module]:
