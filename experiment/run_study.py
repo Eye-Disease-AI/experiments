@@ -18,7 +18,7 @@ from experiment.common_config import (
     OPTUNA_METRIC,
     SEED,
 )
-from experiment.objective import BackboneFreezeCallback, objective
+from experiment.objective import objective
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
 
