@@ -24,7 +24,7 @@ class ModelBase(L.LightningModule):
     def __init__(self, n_classes: int, class_weights: torch.Tensor | None = None):
         super().__init__()
         # self.loss_fn = nn.CrossEntropyLoss(weight=class_weights)
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn = nn.CrossEntropyLoss(class_weights)
         self._n_classes = n_classes
         self.val_metrics = MetricCollection(
             {
