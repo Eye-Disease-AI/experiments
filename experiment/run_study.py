@@ -113,6 +113,7 @@ def run_study(
                 run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
             ),
             precision=GPU_PRECISION,
+            deterministic=True,
         )
         trainer.fit(best_model, datamodule=datamodule)
 
