@@ -18,7 +18,7 @@ from experiment.common_config import (
     OPTUNA_METRIC,
     SEED,
 )
-from experiment.objective import BackboneFreezeCallback, objective
+from experiment.objective import objective
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
 
@@ -97,18 +97,14 @@ def run_study(
             datamodule.dataset.n_classes, **model_params, class_weights=class_weights
         )  # pyright: ignore
 
-        freeze_cb = BackboneFreezeCallback(
-            monitor=OPTUNA_METRIC,
-            patience=BACKBONE_UNFREEZE_PATIENCE,
-            mode=OPTUNA_DIRECTION,
-        )
+
         trainer = L.Trainer(
             max_epochs=best_epoch + 1,
             accelerator="auto",
             enable_progress_bar=True,
             enable_model_summary=False,
             enable_checkpointing=False,
-            callbacks=[freeze_cb],
+            callbacks=[],
             logger=MLFlowLogger(
                 run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
             ),

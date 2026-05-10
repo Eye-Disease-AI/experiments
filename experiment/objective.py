@@ -3,13 +3,11 @@ import time
 import lightning as L
 import mlflow
 import optuna
-import torch
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
 from experiment.common_config import (
-    BACKBONE_UNFREEZE_PATIENCE,
     EARLY_STOPPING_PATIENCE,
     EPOCHS,
     GPU_PRECISION,
@@ -75,53 +73,6 @@ class OptunaMLflowCallback(Callback):
     def on_train_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
         self._flush()
 
-
-class BackboneFreezeCallback(Callback):
-    """Freezes backbone at start; unfreezes it once the metric stops improving."""
-
-    def __init__(self, monitor: str, patience: int, mode: str):
-        self.monitor = monitor
-        self.patience = patience
-        self.mode = mode
-        self._best = None
-        self._wait = 0
-        self._unfrozen = False
-
-    def on_fit_start(self, trainer: L.Trainer, pl_module: L.LightningModule):
-        for m in pl_module.backbone_modules():  # pyright: ignore
-            for p in m.parameters():
-                p.requires_grad = False
-
-    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
-        if self._unfrozen:
-            return
-        val = trainer.callback_metrics.get(self.monitor)
-        if val is None:
-            return
-        v = val.item()
-        improved = self._best is None or (
-            v < self._best if self.mode == "min" else v > self._best
-        )
-        if improved:
-            self._best = v
-            self._wait = 0
-        else:
-            self._wait += 1
-            if self._wait >= self.patience:
-                for m in pl_module.backbone_modules():  # pyright: ignore
-                    for p in m.parameters():
-                        p.requires_grad = True
-                self._unfrozen = True
-                # reset early stopping patience after unfreezing
-                for cb in trainer.callbacks:  # pyright: ignore
-                    if isinstance(cb, EarlyStopping):
-                        cb.wait_count = 0
-                        torch_inf = torch.tensor(torch.inf)
-                        cb.best_score = (
-                            torch_inf if cb.monitor_op == torch.lt else -torch_inf
-                        )
-
-
 def objective(
     datamodule: L.LightningDataModule,
     rng: RNG,
@@ -131,10 +82,10 @@ def objective(
 ):
     rng.set_seed(SEED)
 
-    lr = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
-    weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
-    dropout = trial.suggest_float("dropout", 0.0, 0.5)
-    batch_size = trial.suggest_categorical("batch_size", [64])
+    lr = trial.suggest_float("lr", 1e-5, 1e-5, log=True)
+    weight_decay = 1e-8#trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
+    dropout = 0.5#trial.suggest_float("dropout", 0.0, 0.5)
+    batch_size = trial.suggest_categorical("batch_size", [32])
 
     datamodule.batch_size = batch_size  # pyright: ignore
     datamodule.setup(stage="fit")
@@ -176,17 +127,12 @@ def objective(
             patience=EARLY_STOPPING_PATIENCE,
             mode=OPTUNA_DIRECTION,
         )
-        freeze_cb = BackboneFreezeCallback(
-            monitor=OPTUNA_METRIC,
-            patience=BACKBONE_UNFREEZE_PATIENCE,
-            mode=OPTUNA_DIRECTION,
-        )
 
         trainer = L.Trainer(
             max_epochs=EPOCHS,
             accelerator="auto",
             logger=mlf_logger,
-            callbacks=[freeze_cb, pruning_cb, early_stop_cb],
+            callbacks=[pruning_cb],
             enable_progress_bar=True,
             enable_model_summary=False,
             enable_checkpointing=False,
