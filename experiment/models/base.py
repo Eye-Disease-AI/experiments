@@ -17,7 +17,7 @@ from torchmetrics.classification import (
     MulticlassRecall,
 )
 
-from experiment.common_config import BACKBONE_LR_FACTOR, OPTIMIZER
+from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR
 
 
 class ModelBase(L.LightningModule):
@@ -107,4 +107,12 @@ class ModelBase(L.LightningModule):
         return []
 
     def configure_optimizers(self):
-        return OPTIMIZER(params=self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay, amsgrad=True)
+        optimizer = OPTIMIZER(params=self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay, amsgrad=True)
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            eta_min=SCHEDULER_MIN_LR,
+            T_max=SCHEDULER_MAX_T,
+        )
+
+        return ([optimizer], [scheduler])
