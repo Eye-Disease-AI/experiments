@@ -11,8 +11,8 @@ TRY = 2
 
 MODELS = [
     (ConvNext, f"{EXPERIMENT_NAME}/convnext-search_{TRY}"),
-    (ViT, f"{EXPERIMENT_NAME}/vit-search_{TRY}"),
-    (Swin, f"{EXPERIMENT_NAME}/swin-search_{TRY}"),
+#    (ViT, f"{EXPERIMENT_NAME}/vit-search_{TRY}"),
+#    (Swin, f"{EXPERIMENT_NAME}/swin-search_{TRY}"),
 ]
 
 rng = RNG()

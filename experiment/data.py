@@ -8,6 +8,7 @@ from torchvision.transforms import v2 as transformsv2
 from dataset.loader import NuclearCataractDataset
 from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD
 from lib.seed import RNG
+import numpy as np
 
 data_path = "data"
 if not os.path.exists(data_path):
@@ -67,25 +68,24 @@ class MyDataModule(L.LightningDataModule):
         if not hasattr(self, "dataset"):
             self.dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
-                pre_rot_size,
+                pre_rot_size if self.do_cache else None,
                 self.return_paths,
             )
 
         if not hasattr(self, "test_dataset"):
             self.test_dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TestMode(),
-                pre_rot_size,
+                pre_rot_size if self.do_cache else None,
                 self.return_paths,
             )
 
         self.transform = transformsv2.Compose(
             [
-                transformsv2.ConvertImageDtype(),
-                transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
-                transformsv2.RandomHorizontalFlip(0.5),
-                transformsv2.RandomRotation(15),  # pyright: ignore
-                transformsv2.CenterCrop((self.image_size, self.image_size)),
-                transformsv2.GaussianNoise(mean=0, sigma=0.01),
+            transformsv2.Resize((int(np.ceil(self.image_size*1.5)), int(np.ceil(self.image_size*1.5)))),
+            transformsv2.RandomHorizontalFlip(0.5),
+            transformsv2.RandomRotation(15),
+            transformsv2.Resize((self.image_size, self.image_size)),
+            transformsv2.ConvertImageDtype(),
             ]
         )
         self.val_transform = transformsv2.Compose(
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     datamodule.prepare_data()
     datamodule.setup()
 
-    loader = datamodule.val_dataloader()
+    loader = datamodule.train_dataloader()
     fig, ax = plt.subplots(3, 3)
     loader_iter = iter(loader)
     img, label, *path = next(loader_iter)
