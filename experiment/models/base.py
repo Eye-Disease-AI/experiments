@@ -17,7 +17,7 @@ from torchmetrics.classification import (
     MulticlassRecall,
 )
 
-from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR
+from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR, USE_SCHEDULER
 
 
 class ModelBase(L.LightningModule):
@@ -119,10 +119,12 @@ class ModelBase(L.LightningModule):
             amsgrad=True,
         )  # pyright: ignore
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            eta_min=SCHEDULER_MIN_LR,
-            T_max=SCHEDULER_MAX_T,
-        )
+        if USE_SCHEDULER:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                eta_min=SCHEDULER_MIN_LR,
+                T_max=SCHEDULER_MAX_T,
+            )
+        else: scheduler=None
 
         return ([optimizer], [scheduler])
