@@ -5,7 +5,7 @@ import lightning as L
 import torch
 from torchvision.transforms import v2 as transformsv2
 
-from dataset.loader import NuclearCataractDataset
+from dataset.loader import NuclearCataractDataset, HardPolicy
 from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD
 from lib.seed import RNG
 import numpy as np
@@ -47,7 +47,7 @@ class SubsetTransformer(torch.utils.data.Dataset):
 class MyDataModule(L.LightningDataModule):
     """Splits to train/val/test subsets with custom transforms"""
 
-    def __init__(self, rng: RNG, batch_size: int = 32, return_paths=False, cache=True):
+    def __init__(self, rng: RNG, batch_size: int = 32, return_paths=False, cache=True, hard_policy=HardPolicy.PASSTHROUGH):
         super().__init__()
         self.dir = DATASET_PATH
         self.image_size = 224
@@ -57,6 +57,7 @@ class MyDataModule(L.LightningDataModule):
         self.rng = rng
         self.batch_size = batch_size
         self.do_cache = cache
+        self.hard_policy = hard_policy
 
     def setup(self, stage: str | None = None):
         max_angle = 15
@@ -70,6 +71,7 @@ class MyDataModule(L.LightningDataModule):
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
                 pre_rot_size if self.do_cache else None,
                 self.return_paths,
+                hard_policy=self.hard_policy
             )
 
         if not hasattr(self, "test_dataset"):
@@ -77,6 +79,7 @@ class MyDataModule(L.LightningDataModule):
                 NuclearCataractDataset.TestMode(),
                 pre_rot_size if self.do_cache else None,
                 self.return_paths,
+                hard_policy=self.hard_policy
             )
 
         self.transform = transformsv2.Compose(
