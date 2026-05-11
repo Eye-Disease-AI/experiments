@@ -1,3 +1,4 @@
+from dataset.hard_policy import HardPolicy
 from experiment.common_config import EXPERIMENT_NAME, SEED
 from experiment.data import MyDataModule
 from experiment.models.convnext import ConvNext
@@ -19,7 +20,7 @@ rng = RNG()
 rng.set_seed(SEED)
 exp = Experiment(EXPERIMENT_NAME)
 
-datamodule = MyDataModule(rng)
+datamodule = MyDataModule(rng, hard_policy=HardPolicy.DOMINATE)
 datamodule.prepare_data()
 
 for ModelClass, study_name in MODELS:
