@@ -16,6 +16,7 @@ from experiment.common_config import (
     OPTUNA_DIRECTION,
     OPTUNA_METRIC,
     SEED,
+    USE_EARLY_STOPPING,
     USE_FREEZING,
 )
 from lib.log_silencer import stop_logs
@@ -24,6 +25,41 @@ from lib.seed import RNG
 
 stop_logs()
 
+def create_trainer(run, optuna_callback=None, **kwargs):
+    mlf_logger = MLFlowLogger(
+        run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
+    )
+    callbacks = []
+
+    if optuna_callback is not None:
+        callbacks.append(optuna_callback)
+
+    if USE_EARLY_STOPPING:
+        callbacks.append(EarlyStopping(
+            monitor=OPTUNA_METRIC,
+            patience=EARLY_STOPPING_PATIENCE,
+            mode=OPTUNA_DIRECTION,
+        ))
+    if USE_FREEZING:
+        callbacks.append(BackboneFreezeCallback(
+            monitor=OPTUNA_METRIC,
+            patience=BACKBONE_UNFREEZE_PATIENCE,
+            mode=OPTUNA_DIRECTION,
+        ))
+    defaults = dict(
+        max_epochs=EPOCHS,
+        accelerator="auto",
+        logger=mlf_logger,
+        callbacks=callbacks,
+        enable_progress_bar=True,
+        enable_model_summary=False,
+        enable_checkpointing=False,
+        log_every_n_steps=1,
+        precision=GPU_PRECISION,
+        deterministic=True,
+    )
+    defaults.update(kwargs)
+    return L.Trainer(**defaults)
 
 class OptunaMLflowCallback(Callback):
     """Reports val_loss to Optuna each epoch and handles pruning + batched MLflow logging."""
@@ -161,42 +197,14 @@ def objective(
                 "model": str(model),
             }
         )
-
-        mlf_logger = MLFlowLogger(
-            run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
-        )
-        pruning_cb = OptunaMLflowCallback(
+        optuna_callback = OptunaMLflowCallback(
             trial=trial,
             exp=exp,
             run_id=run.info.run_id,
             log_every_n_epochs=LOG_EVERY_N_EPOCHS,
         )
-        early_stop_cb = EarlyStopping(
-            monitor=OPTUNA_METRIC,
-            patience=EARLY_STOPPING_PATIENCE,
-            mode=OPTUNA_DIRECTION,
-        )
-        if USE_FREEZING:
-            freeze_cb = BackboneFreezeCallback(
-                monitor=OPTUNA_METRIC,
-                patience=BACKBONE_UNFREEZE_PATIENCE,
-                mode=OPTUNA_DIRECTION,
-            )
-        else: freeze_cb = None
-
-        trainer = L.Trainer(
-            max_epochs=EPOCHS,
-            accelerator="auto",
-            logger=mlf_logger,
-            callbacks=[pruning_cb, freeze_cb],
-            enable_progress_bar=True,
-            enable_model_summary=False,
-            enable_checkpointing=False,
-            log_every_n_steps=1,
-            precision=GPU_PRECISION,
-            deterministic=True,
-        )
+        trainer = create_trainer(run, optuna_callback=optuna_callback)
 
         trainer.fit(model, datamodule=datamodule)
 
-        return pruning_cb.best_value
+        return optuna_callback.best_value
