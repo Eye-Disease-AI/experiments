@@ -566,6 +566,7 @@ dependencies = [
     { name = "psycopg2-binary" },
     { name = "seaborn" },
     { name = "torch" },
+    { name = "torchgan" },
     { name = "torchvision" },
 ]
 
@@ -581,6 +582,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "torch", specifier = ">=2.11.0" },
+    { name = "torchgan", specifier = ">=0.1.0" },
     { name = "torchvision", specifier = ">=0.26.0" },
 ]
 
@@ -2282,6 +2284,23 @@ wheels = [
 ]
 
 [[package]]
+name = "torchgan"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "scipy" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "wget" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/cd/55b0bc098beaee1a85084450d4a37b95048c61eb1598d1186a1197667623/torchgan-0.1.0.tar.gz", hash = "sha256:d55396a72c302aa8b05e503a421ac8f68b8e9e8b87f924a647a048b271c5b246", size = 47253, upload-time = "2021-10-18T13:02:24.168Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/37/bee3edb085c23f999f732c49c4b90ffce60b168ae6b108e0725621e233f9/torchgan-0.1.0-py3-none-any.whl", hash = "sha256:6be3fd633fff65b3120e43b3e5f46cf7529fe2b20db7c3bf467d24b1bb865a12", size = 71709, upload-time = "2021-10-18T13:02:21.421Z" },
+]
+
+[[package]]
 name = "torchmetrics"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2446,6 +2465,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/dd/b2/381be8cfdee792dd1
 wheels = [
     { url = "https://files.pythonhosted.org/packages/93/8c/2e650f2afeb7ee576912636c23ddb621c91ac6a98e66dc8d29c3c69446e1/werkzeug-3.1.8-py3-none-any.whl", hash = "sha256:63a77fb8892bf28ebc3178683445222aa500e48ebad5ec77b0ad80f8726b1f50", size = 226459, upload-time = "2026-04-02T18:49:12.72Z" },
 ]
+
+[[package]]
+name = "wget"
+version = "3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/6a/62e288da7bcda82b935ff0c6cfe542970f04e29c756b0e147251b2fb251f/wget-3.2.zip", hash = "sha256:35e630eca2aa50ce998b9b1a127bb26b30dfee573702782aa982f875e3f16061", size = 10857, upload-time = "2015-10-22T15:26:37.51Z" }
 
 [[package]]
 name = "yarl"
