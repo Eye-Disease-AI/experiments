@@ -16,6 +16,7 @@ from experiment.common_config import (
     OPTUNA_DIRECTION,
     OPTUNA_METRIC,
     SEED,
+    USE_FREEZING,
 )
 from lib.log_silencer import stop_logs
 from lib.mlflow_setup import Experiment
@@ -175,11 +176,13 @@ def objective(
             patience=EARLY_STOPPING_PATIENCE,
             mode=OPTUNA_DIRECTION,
         )
-        freeze_cb = BackboneFreezeCallback(
-            monitor=OPTUNA_METRIC,
-            patience=BACKBONE_UNFREEZE_PATIENCE,
-            mode=OPTUNA_DIRECTION,
-        )
+        if USE_FREEZING:
+            freeze_cb = BackboneFreezeCallback(
+                monitor=OPTUNA_METRIC,
+                patience=BACKBONE_UNFREEZE_PATIENCE,
+                mode=OPTUNA_DIRECTION,
+            )
+        else: freeze_cb = None
 
         trainer = L.Trainer(
             max_epochs=EPOCHS,
