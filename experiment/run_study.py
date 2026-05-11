@@ -2,7 +2,6 @@ import lightning as L
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
-from lightning.pytorch.loggers import MLFlowLogger
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
@@ -18,7 +17,7 @@ from experiment.common_config import (
     OPTUNA_METRIC,
     SEED,
 )
-from experiment.objective import objective
+from experiment.objective import create_trainer, objective
 from lib.mlflow_setup import Experiment, save_model
 from lib.seed import RNG
 
@@ -98,18 +97,10 @@ def run_study(
         )  # pyright: ignore
 
 
-        trainer = L.Trainer(
+        trainer = create_trainer(
+            run=parent_run,
             max_epochs=best_epoch + 1,
-            accelerator="auto",
-            enable_progress_bar=True,
-            enable_model_summary=False,
-            enable_checkpointing=False,
-            callbacks=[],
-            logger=MLFlowLogger(
-                run_id=parent_run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
-            ),
-            precision=GPU_PRECISION,
-            deterministic=True,
+            callbacks=[],  # override: no Optuna/EarlyStopping/Freeze on retrain
         )
         trainer.fit(best_model, datamodule=datamodule)
 

@@ -23,7 +23,6 @@ from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHE
 class ModelBase(L.LightningModule):
     def __init__(self, n_classes: int, class_weights: torch.Tensor | None = None):
         super().__init__()
-        # self.loss_fn = nn.CrossEntropyLoss(weight=class_weights)
         self.loss_fn = nn.CrossEntropyLoss(class_weights)
         self._n_classes = n_classes
         self.val_metrics = MetricCollection(
@@ -125,6 +124,6 @@ class ModelBase(L.LightningModule):
                 eta_min=SCHEDULER_MIN_LR,
                 T_max=SCHEDULER_MAX_T,
             )
-        else: scheduler=None
-
-        return ([optimizer], [scheduler])
+            return ([optimizer], [scheduler])
+        
+        return optimizer
