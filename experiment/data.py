@@ -7,7 +7,7 @@ from torchvision.transforms import v2 as transformsv2
 
 from dataset.loader import NuclearCataractDataset, HardPolicy
 from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD
-from lib.seed import RNG
+from lib.reproducibility import RNG
 import numpy as np
 
 data_path = "data"

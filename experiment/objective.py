@@ -21,7 +21,7 @@ from experiment.common_config import (
 )
 from lib.log_silencer import stop_logs
 from lib.mlflow_setup import Experiment
-from lib.seed import RNG
+from lib.reproducibility import RNG
 
 stop_logs()
 
