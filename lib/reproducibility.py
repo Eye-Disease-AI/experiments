@@ -1,8 +1,4 @@
-import os
-import random
-
-import numpy
-import torch
+import subprocess
 import lightning as L
 
 class RNG:
@@ -19,3 +15,12 @@ class RNG:
     def disable_determinism(self):
         self.seed = None
         L.seed_everything(None)
+
+def get_git_sha() -> str:
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "--short", "HEAD"], text=True
+    ).strip()
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"], text=True
+    ).strip()
+    return f"{sha}-dirty" if dirty else sha
