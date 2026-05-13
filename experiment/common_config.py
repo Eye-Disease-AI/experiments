@@ -14,8 +14,8 @@ EARLY_STOPPING_PATIENCE = 15
 BACKBONE_UNFREEZE_PATIENCE = 5
 USE_FREEZING=False
 BACKBONE_LR_FACTOR = 1
-OPTUNA_METRIC = "val_loss"
-OPTUNA_DIRECTION = "min"  # "min" or "max"
+OPTUNA_METRIC = "val_auroc"
+OPTUNA_DIRECTION = "max"  # "min" or "max"
 
 # calculated from nuclear_cataract dataset
 NORMALIZE_MEAN = [0.229015, 0.1663, 0.106812]
