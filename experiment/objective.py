@@ -167,7 +167,7 @@ def objective(
 ):
     rng.set_seed(SEED)
 
-    lr = trial.suggest_float("lr", 1e-6, 1e-4, log=True)
+    lr = 5e-5#trial.suggest_float("lr", 1e-6, 1e-4, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True)
     dropout = trial.suggest_float("dropout", 0.0, 0.5)
     batch_size = trial.suggest_categorical("batch_size", [64])
