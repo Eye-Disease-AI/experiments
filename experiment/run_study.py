@@ -99,7 +99,7 @@ def run_study(
 
         trainer = create_trainer(
             run=parent_run,
-            max_epochs=best_epoch + 1,
+            max_epochs=best_epoch,
             callbacks=[],  # override: no Optuna/EarlyStopping/Freeze on retrain
         )
         trainer.fit(best_model, datamodule=datamodule)
