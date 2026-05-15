@@ -7,7 +7,7 @@ from experiments.lib.reproducibility import RNG
 if __name__ == "__main__":
     rng = RNG()
     rng.set_seed(42)
-    datamodule = MyDataModule(rng)
+    datamodule = MyDataModule(rng, cache=False)
     datamodule.setup()
     datamodule.prepare_data()
     model = GAN(datamodule.dataset.n_classes)
@@ -16,11 +16,11 @@ if __name__ == "__main__":
         "max_epochs": 100,
         "accelerator": "auto",
         "enable_progress_bar": True,
-        "enable_model_summary": True,
+        "enable_model_summary": False,
         "enable_checkpointing": False,
         "log_every_n_steps": 1,
         "deterministic": True,
     }
 
     trainer = L.Trainer(**trainer_params)
-    trainer.fit(model)
+    trainer.fit(model, datamodule)

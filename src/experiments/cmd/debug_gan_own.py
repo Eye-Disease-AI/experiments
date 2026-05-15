@@ -1,13 +1,10 @@
-import sys
-
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+from dataset.loader import NuclearCataractDataset
 from torch.utils.data.dataloader import DataLoader
 from torchvision.transforms import v2
 from tqdm import tqdm
-
-from dataset.loader import NuclearCataractDataset
 
 
 class PrintShape(nn.Module):
