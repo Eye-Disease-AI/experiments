@@ -17,13 +17,18 @@ from torchmetrics.classification import (
     MulticlassRecall,
 )
 
-from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR, USE_SCHEDULER
+from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR, USE_SCHEDULER, CLASS_WEIGHTS
 
 
 class ModelBase(L.LightningModule):
     def __init__(self, n_classes: int, class_weights: torch.Tensor | None = None):
         super().__init__()
-        self.loss_fn = nn.CrossEntropyLoss(class_weights)
+        if CLASS_WEIGHTS:
+            self.class_weights = class_weights
+        else:
+            self.class_weights = None
+
+        self.loss_fn = nn.CrossEntropyLoss(weight=self.class_weights)
         self._n_classes = n_classes
         self.val_metrics = MetricCollection(
             {

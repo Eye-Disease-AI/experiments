@@ -8,6 +8,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
 from experiment.common_config import (
+    BACKBONE_UNFREEZE_EPOCHS,
     BACKBONE_UNFREEZE_PATIENCE,
     EARLY_STOPPING_PATIENCE,
     EPOCHS,
@@ -135,28 +136,37 @@ class BackboneFreezeCallback(Callback):
         if val is None:
             return
         v = val.item()
-        improved = self._best is None or (
-            v < self._best if self.mode == "min" else v > self._best
-        )
-        if improved:
-            self._best = v
-            self._wait = 0
-        else:
+        if BACKBONE_UNFREEZE_PATIENCE <= 0:
+            if self._wait  == BACKBONE_UNFREEZE_EPOCHS:
+                self.unfreeze(trainer, pl_module)
             self._wait += 1
-            if self._wait >= self.patience:
-                for m in pl_module.backbone_modules():  # pyright: ignore
-                    for p in m.parameters():
-                        p.requires_grad = True
-                self._unfrozen = True
-                print("### UNFREEZING")
-                # reset early stopping patience after unfreezing
-                for cb in trainer.callbacks:  # pyright: ignore
-                    if isinstance(cb, EarlyStopping):
-                        cb.wait_count = 0
-                        torch_inf = torch.tensor(torch.inf)
-                        cb.best_score = (
-                            torch_inf if cb.monitor_op == torch.lt else -torch_inf
-                        )
+        else:
+            improved = self._best is None or (
+                v < self._best if self.mode == "min" else v > self._best
+            )
+            print(improved, self._wait)
+            if improved:
+                self._best = v
+                self._wait = 0
+            else:
+                self._wait += 1
+                if self._wait >= self.patience:
+                    self.unfreeze(trainer, pl_module)
+
+    def unfreeze(self, trainer: L.Trainer, pl_module: L.LightningModule):
+        for m in pl_module.backbone_modules():  # pyright: ignore
+            for p in m.parameters():
+                p.requires_grad = True
+            self._unfrozen = True
+        print("### UNFREEZING")
+        # reset early stopping patience after unfreezing
+        for cb in trainer.callbacks:  # pyright: ignore
+            if isinstance(cb, EarlyStopping):
+                cb.wait_count = 0
+                torch_inf = torch.tensor(torch.inf)
+                cb.best_score = (
+                    torch_inf if cb.monitor_op == torch.lt else -torch_inf
+                )
 
 def objective(
     datamodule: L.LightningDataModule,
@@ -170,7 +180,7 @@ def objective(
     lr = trial.suggest_float("lr", 1e-5, 5e-5, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True)
     dropout = trial.suggest_float("dropout", 0.1, 0.3)
-    batch_size = trial.suggest_categorical("batch_size", [32])
+    batch_size = trial.suggest_categorical("batch_size", [64])
 
     datamodule.batch_size = batch_size  # pyright: ignore
     datamodule.setup(stage="fit")

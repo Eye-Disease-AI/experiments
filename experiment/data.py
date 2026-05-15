@@ -6,7 +6,7 @@ import torch
 from torchvision.transforms import v2 as transformsv2
 
 from dataset.loader import NuclearCataractDataset, HardPolicy
-from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD
+from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD, NORMALIZE
 from lib.reproducibility import RNG
 import numpy as np
 
@@ -81,23 +81,24 @@ class MyDataModule(L.LightningDataModule):
                 self.return_paths,
                 hard_policy=self.hard_policy
             )
-
-        self.transform = transformsv2.Compose(
-            [
+        train_transforms = [
             transformsv2.Resize((int(np.ceil(self.image_size*1.5)), int(np.ceil(self.image_size*1.5)))),
             transformsv2.RandomHorizontalFlip(0.5),
             transformsv2.RandomRotation(15),
             transformsv2.Resize((self.image_size, self.image_size)),
             transformsv2.ConvertImageDtype(),
-            ]
-        )
-        self.val_transform = transformsv2.Compose(
-            [
+        ]
+        if NORMALIZE:
+            train_transforms.append(transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD))
+        self.transform = transformsv2.Compose(train_transforms)
+                                              
+        val_transforms = [
                 transformsv2.Resize((self.image_size, self.image_size)),
                 transformsv2.ConvertImageDtype(),
-                transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD),
-            ]
-        )
+        ]
+        if NORMALIZE:
+            val_transforms.append(transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD))
+        self.val_transform = transformsv2.Compose(val_transforms)
 
         if not hasattr(self, "train_set"):
             train = self.dataset.train_set()
