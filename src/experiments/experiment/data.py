@@ -59,6 +59,7 @@ class MyDataModule(L.LightningDataModule):
         return_paths=False,
         cache=True,
         hard_policy=HardPolicy.PASSTHROUGH,
+        num_workers=0,
     ):
         super().__init__()
         self.dir = DATASET_PATH
@@ -70,6 +71,7 @@ class MyDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.do_cache = cache
         self.hard_policy = hard_policy
+        self.num_workers = num_workers
 
     def setup(self, stage: str | None = None):
         max_angle = 15
@@ -132,7 +134,11 @@ class MyDataModule(L.LightningDataModule):
             self.test_set = SubsetTransformer(test, transform=self.val_transform)
 
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=self.batch_size, num_workers=0, pin_memory=True
+            dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            persistent_workers=True,
+            pin_memory=True,
         )
 
     def train_dataloader(self):

@@ -7,7 +7,7 @@ from experiments.lib.reproducibility import RNG
 if __name__ == "__main__":
     rng = RNG()
     rng.set_seed(42)
-    datamodule = MyDataModule(rng, cache=False)
+    datamodule = MyDataModule(rng, cache=False, num_workers=3)
     datamodule.setup()
     datamodule.prepare_data()
     model = GAN(datamodule.dataset.n_classes)
