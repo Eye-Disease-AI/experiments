@@ -2,6 +2,7 @@ import lightning as L
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
+from experiment.data import MyDataModule
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
@@ -33,7 +34,7 @@ def run_study(
     study_name: str,
     exp: Experiment,
     rng: RNG,
-    datamodule: L.LightningDataModule,
+    datamodule: MyDataModule,
 ):
     study = optuna.create_study(
         study_name=study_name,
@@ -45,6 +46,7 @@ def run_study(
     exp.study = study
     study.set_user_attr("model_class", ModelClass.__name__)
     study.set_user_attr("config", CONFIG_PARAMS)
+    study.set_user_attr("hard_policy", datamodule.hard_policy.name)
 
     n_finished = sum(
         1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
@@ -60,6 +62,7 @@ def run_study(
         mlflow.set_tag("optuna_study", study_name)
         mlflow.set_tag("model", ModelClass.__name__)
         mlflow.log_params(CONFIG_PARAMS)
+        mlflow.log_param("hard_policy", datamodule.hard_policy.name)
 
     if n_finished >= MAX_TRIALS:
         print(
