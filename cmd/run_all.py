@@ -9,9 +9,8 @@ from lib.mlflow_setup import Experiment
 from lib.reproducibility import RNG, get_git_sha
 SHA = get_git_sha()
 
-TRY = 1
 MODELS = [
-    (ConvNext, f"{EXPERIMENT_NAME}/convnext-search_{TRY}_{SHA}")
+    (ConvNext, f"{EXPERIMENT_NAME}/convnext-search_{SHA}")
 ]
 
 rng = RNG()
