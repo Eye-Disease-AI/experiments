@@ -1,11 +1,9 @@
-import argparse
-
 import mlflow
 import numpy as np
 from scipy import stats
-
+import sys
 from lib.mlflow_setup import Experiment
-
+from experiment.common_config import *
 
 def get_trial_vals(
     exp: Experiment, study_name: str, metric_name: str = "val_acc"
@@ -63,9 +61,9 @@ def bootstrap_ci(values: list[float], n_bootstrap=10_000, ci=0.95) -> dict:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    EXPERIMENT_NAME = "nuclear-cataract-test"
     STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search5"
+    if len(sys.argv) > 1:
+        STUDY_NAME=sys.argv[1]
     exp = Experiment(EXPERIMENT_NAME)
     mlflow.set_tracking_uri("http://localhost:5000")
     losses = get_trial_vals(exp, STUDY_NAME)
