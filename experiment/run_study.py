@@ -9,6 +9,7 @@ from optuna.visualization.matplotlib import (
     plot_param_importances,
 )
 
+from experiment import common_config
 from experiment.common_config import (
     BACKBONE_UNFREEZE_PATIENCE,
     GPU_PRECISION,
@@ -17,6 +18,11 @@ from experiment.common_config import (
     OPTUNA_METRIC,
     SEED,
 )
+
+CONFIG_PARAMS = {
+    k: str(v) for k, v in vars(common_config).items()
+    if k.isupper() and not k.startswith("_")
+}
 from experiment.objective import create_trainer, objective
 from lib.mlflow_setup import Experiment, save_model
 from lib.reproducibility import RNG
@@ -37,6 +43,8 @@ def run_study(
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
     )
     exp.study = study
+    study.set_user_attr("model_class", ModelClass.__name__)
+    study.set_user_attr("config", CONFIG_PARAMS)
 
     n_finished = sum(
         1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
@@ -51,6 +59,7 @@ def run_study(
         study.set_user_attr("mlflow_parent_run_id", parent_run.info.run_id)
         mlflow.set_tag("optuna_study", study_name)
         mlflow.set_tag("model", ModelClass.__name__)
+        mlflow.log_params(CONFIG_PARAMS)
 
     if n_finished >= MAX_TRIALS:
         print(
