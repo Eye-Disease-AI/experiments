@@ -120,9 +120,9 @@ datamodule = MyDataModule(
 datamodule.setup(stage="fit")
 
 results = []
-validation_run_name = f"{STUDY_TO_VERIFY}/validation_{MODE}"
+VALIDATION_STUDY_NAME = f"{STUDY_TO_VERIFY}/validation_{MODE}"
 
-with mlflow.start_run(run_name=validation_run_name) as parent_run:
+with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
     mlflow.set_tag("study_name", STUDY_TO_VERIFY)
     mlflow.set_tag("model_class", ModelClass.__name__)
     mlflow.set_tag("mode", MODE)
@@ -145,6 +145,7 @@ with mlflow.start_run(run_name=validation_run_name) as parent_run:
             print(f"\n--- Fold {i + 1}/{K}  train={len(train_sub)} val={len(val_sub)} ---")
             with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
                 mlflow.set_tag("fold", i)
+                mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
                 m = train_and_validate(datamodule, train_sub, val_sub, SEED, best_params, child_run)
                 mlflow.log_metrics(m)
             results.append(m)
