@@ -1,8 +1,11 @@
+import tempfile
+
 import lightning as L
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
 from experiment.data import MyDataModule
+from lightning.pytorch.callbacks import ModelCheckpoint
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
@@ -35,6 +38,7 @@ def run_study(
     exp: Experiment,
     rng: RNG,
     datamodule: MyDataModule,
+    retrain = True,
 ):
     study = optuna.create_study(
         study_name=study_name,
@@ -108,19 +112,29 @@ def run_study(
             datamodule.dataset.n_classes, **model_params, class_weights=class_weights
         )  # pyright: ignore
 
+        if retrain:
+            with tempfile.TemporaryDirectory() as ckpt_dir:
+                ckpt_cb = ModelCheckpoint(
+                    dirpath=ckpt_dir,
+                    monitor=OPTUNA_METRIC,
+                    mode=OPTUNA_DIRECTION,
+                    save_top_k=1,
+                )
+                trainer = create_trainer(
+                    run=parent_run,
+                    max_epochs=best_epoch+1,
+                    callbacks=[ckpt_cb],
+                )
+                trainer.fit(best_model, datamodule=datamodule)
 
-        trainer = create_trainer(
-            run=parent_run,
-            max_epochs=best_epoch,
-            callbacks=[],  # override: no Optuna/EarlyStopping/Freeze on retrain
-        )
-        trainer.fit(best_model, datamodule=datamodule)
+                if ckpt_cb.best_model_path:
+                    best_model = ModelClass.load_from_checkpoint(ckpt_cb.best_model_path)
+                retrain_metric = ckpt_cb.best_model_score
+                if retrain_metric is not None:
+                    mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
 
-        retrain_metric = trainer.callback_metrics.get(OPTUNA_METRIC)
-        if retrain_metric is not None:
-            mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
-        example_input, *_ = next(iter(datamodule.val_dataloader()))
-        save_model(best_model, example_input=example_input[:1])
+            example_input, *_ = next(iter(datamodule.val_dataloader()))
+            save_model(best_model, example_input=example_input[:1])
 
         try:
             fig = plot_optimization_history(study)
