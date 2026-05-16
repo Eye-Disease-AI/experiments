@@ -6,7 +6,7 @@ import torch
 from torchvision.transforms import v2 as transformsv2
 
 from dataset.loader import NuclearCataractDataset, HardPolicy
-from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD, NORMALIZE
+from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD, NORMALIZE, IMAGE_SIZE
 from lib.reproducibility import RNG
 import numpy as np
 
@@ -50,7 +50,7 @@ class MyDataModule(L.LightningDataModule):
     def __init__(self, rng: RNG, batch_size: int = 32, return_paths=False, cache=True, hard_policy=HardPolicy.PASSTHROUGH):
         super().__init__()
         self.dir = DATASET_PATH
-        self.image_size = 224
+        self.image_size = IMAGE_SIZE
         self.image_channels = 3
         self.input_size = self.image_size * self.image_size * self.image_channels
         self.return_paths = return_paths

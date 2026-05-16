@@ -1,4 +1,5 @@
 import torch
+import math
 
 SEED = 2137
 EXPERIMENT_NAME = "restored-baseline-search"
@@ -25,6 +26,9 @@ BACKBONE_LR_FACTOR = 1
 
 # calculated from nuclear_cataract dataset
 NORMALIZE = False
+IMAGE_SIZE = 224
+AUGM_ROT_ANGLE=15
+CACHE_SIZE=int(math.ceil(IMAGE_SIZE * (math.sin(math.radians(AUGM_ROT_ANGLE)) + math.cos(math.radians(AUGM_ROT_ANGLE)))))
 NORMALIZE_MEAN = [0.229015, 0.1663, 0.106812]
 NORMALIZE_STD = [0.281245, 0.243682, 0.220464]
 
