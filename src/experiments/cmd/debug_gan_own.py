@@ -24,51 +24,49 @@ def show_img(img):
     # plt.show()
 
 
-def generate_fake_single(generator, generator_noise_dim, label: torch.Tensor):
-    z_noises = torch.rand(1, 3, *generator_noise_dim[1:])
-    z = add_label_channel(z_noises, label)
+def generate_fake_single(generator, noise_dims: int, label: torch.Tensor):
+    z = create_noise(1, noise_dims, label)
     return generator(z).squeeze(0)
 
 
-def get_generator(device: str):
+def get_generator(device: str, noise_dims: int = 100, gen_dims: int = 8, num_channels: int = 3):
     generator = nn.Sequential(
-        nn.ConvTranspose2d(4, 16, 4, 1, 0, bias=False),
-        nn.LazyBatchNorm2d(),
-        nn.ReLU(True),
-        nn.ConvTranspose2d(16, 8, 4, 2, 1, bias=False),
-        nn.LazyBatchNorm2d(),
-        nn.ReLU(True),
-        nn.ConvTranspose2d(8, 3, 8, 2, 1, bias=False),
-        nn.LazyBatchNorm2d(),
-        nn.ReLU(True),
+        nn.ConvTranspose2d(noise_dims, gen_dims * 8, 4, 1, 0, bias=False),
+        nn.BatchNorm2d(gen_dims * 8),
         nn.Tanh(),
+        nn.ConvTranspose2d(gen_dims * 8, gen_dims * 4, 4, 2, 1, bias=False),
+        nn.BatchNorm2d(gen_dims * 4),
+        nn.Tanh(),
+        nn.ConvTranspose2d(gen_dims * 4, gen_dims * 2, 4, 2, 1, bias=False),
+        nn.BatchNorm2d(gen_dims * 2),
+        nn.Tanh(),
+        nn.ConvTranspose2d(gen_dims * 2, gen_dims, 4, 2, 1, bias=False),
+        nn.BatchNorm2d(gen_dims),
+        nn.Tanh(),
+        nn.ConvTranspose2d(gen_dims, gen_dims, 4, 2, 1, bias=False),
+        nn.Tanh(),
+        nn.ConvTranspose2d(gen_dims, num_channels, 3, 1, 1, bias=False),
+        nn.Sigmoid(),
+        PrintShape("Generated shape")
     )
     generator.to(device)
     return generator
 
 
-def get_discriminator(device: str):
+def get_discriminator(device: str, base_hidden_dim: int = 64, num_channels: int = 4):
     discriminator = nn.Sequential(
-        nn.Conv2d(in_channels=4, out_channels=8, kernel_size=3, padding=1),
-        nn.MaxPool2d(kernel_size=2, stride=2),
-        nn.LeakyReLU(),
-        nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1),
-        nn.MaxPool2d(kernel_size=2, stride=2),
-        nn.LeakyReLU(),
-        nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1),
-        nn.MaxPool2d(kernel_size=2, stride=2),
-        nn.LeakyReLU(),
-        nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
-        nn.MaxPool2d(kernel_size=2, stride=2),
-        nn.LeakyReLU(),
-        PrintShape("after last pool"),
-        nn.Flatten(start_dim=1, end_dim=3),
-        PrintShape("after flatten"),
-        nn.Linear(in_features=256, out_features=256),
-        nn.LeakyReLU(),
-        nn.Linear(in_features=256, out_features=128),
-        nn.LeakyReLU(),
-        nn.Linear(in_features=128, out_features=2),
+        nn.Conv2d(num_channels, base_hidden_dim, 4, 2, 1, bias=False),
+        nn.LeakyReLU(0.2, inplace=True),
+        nn.Conv2d(base_hidden_dim, base_hidden_dim * 2, 4, 2, 1, bias=False),
+        nn.BatchNorm2d(base_hidden_dim * 2),
+        nn.LeakyReLU(0.2, inplace=True),
+        nn.Conv2d(base_hidden_dim * 2, base_hidden_dim * 4, 4, 2, 1, bias=False),
+        nn.BatchNorm2d(base_hidden_dim * 4),
+        nn.LeakyReLU(0.2, inplace=True),
+        nn.Conv2d(base_hidden_dim * 4, base_hidden_dim * 8, 4, 2, 1, bias=False),
+        nn.BatchNorm2d(base_hidden_dim * 8),
+        nn.LeakyReLU(0.2, inplace=True),
+        nn.Conv2d(base_hidden_dim * 8, 2, 4, 1, 0, bias=False),
     )
     discriminator.to(device)
     return discriminator
@@ -82,21 +80,30 @@ def add_label_channel(mat: torch.Tensor, labels: torch.Tensor):
     labels = labels[-1, None, None, None].expand(batch_size, 1, *img_size)
     return torch.cat((mat, labels), dim=1)
 
+# Creates noise of shape: (B, noise_dims)
+def create_noise(batch_size: int, noise_dims: int, labels: torch.Tensor):
+    result = torch.rand(batch_size, noise_dims - 1)
+    labels = labels.unsqueeze(1)
+    result = torch.cat((result, labels), dim=1)
+    result = result.unsqueeze(2)
+    result = result.unsqueeze(3)
+    return result
+
+
 def train():
     device = "cpu"
     dataset = NuclearCataractDataset(NuclearCataractDataset.TrainValMode(0.8, 0.2))
     train_set = dataset.train_set()
 
-    generator_noise_dim = (4, 4, 4)
-
-    generator = get_generator(device)
+    noise_dims=100
+    generator = get_generator(device, noise_dims=noise_dims)
     discriminator = get_discriminator(device)
 
     gen_loss_fn = nn.BCEWithLogitsLoss()
-    gen_optimizer = torch.optim.Adam(generator.parameters(), lr=0.001)
+    gen_optimizer = torch.optim.AdamW(generator.parameters(), lr=0.0006)
     dis_loss_fn = nn.BCEWithLogitsLoss()
-    dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=0.0005)
-    img_size = (32, 32)
+    dis_optimizer = torch.optim.AdamW(discriminator.parameters(), lr=0.0002)
+    img_size = (64, 64)
     prepare_transforms = v2.Compose(
         [
             v2.ToImage(),
@@ -105,7 +112,7 @@ def train():
         ]
     )
 
-    batch_size = 32
+    batch_size = 16
     data_loader = DataLoader(train_set, batch_size=batch_size, drop_last=True)
 
     skip_dis_train = False
@@ -127,31 +134,24 @@ def train():
             x = x.to(device)
             y = y.to(device)
 
-            z_labels = y
-            z_labels = z_labels[-1, None, None, None].expand(
-                batch_size, 1, *generator_noise_dim[1:]
-            )
-            z_noises = torch.rand(batch_size, 3, *generator_noise_dim[1:])
-            z = torch.cat((z_noises, z_labels), dim=1)
-
             gen_loss = None
             dis_fake_loss = None
             dis_real_loss = None
 
             if not skip_gen_train:
+                z = create_noise(batch_size, noise_dims, y)
                 fake_x = generator(z)
                 fake_x = add_label_channel(fake_x, y)
-                real_x = add_label_channel(x, y)
 
-                dis_fake_outputs = discriminator(fake_x)
-                dis_target_outputs = nn.functional.one_hot(y, 2).to(dtype=torch.float)
+                dis_fake_outputs = discriminator(fake_x).squeeze()
+                dis_target_outputs = nn.functional.one_hot(torch.ones(batch_size, dtype=torch.int64), 2).to(dtype=torch.float)
 
                 gen_optimizer.zero_grad()
                 gen_loss = gen_loss_fn(dis_fake_outputs, dis_target_outputs)
                 gen_loss.backward()
                 gen_optimizer.step()
 
-                if gen_loss < skip_dis_train_until or max_dis_skip_count >= 10:
+                if gen_loss < skip_dis_train_until or max_dis_skip_count >= 2:
                     skip_dis_train = False
                     max_dis_skip_count = 0
             else:
@@ -159,16 +159,16 @@ def train():
                 print("Skipping generator training")
 
             if not skip_dis_train:
+                z = create_noise(batch_size, noise_dims, y)
                 fake_x = generator(z)
                 fake_x = add_label_channel(fake_x, y)
+                real_x = add_label_channel(x, y)
 
-                dis_fake_outputs = discriminator(fake_x)
-                dis_target_labels = torch.zeros(dis_fake_outputs.shape[0]).to(
-                    dtype=torch.int64
-                )
-                dis_target_outputs = nn.functional.one_hot(dis_target_labels, 2).to(
-                    dtype=torch.float
-                )
+                dis_fake_outputs = discriminator(fake_x).squeeze()
+                print(dis_fake_outputs.shape)
+                dis_target_labels = torch.zeros(dis_fake_outputs.shape[0]).to(dtype=torch.int64)
+                dis_target_outputs = nn.functional.one_hot(dis_target_labels, 2).to(dtype=torch.float)
+                print(dis_target_outputs.shape)
 
                 dis_optimizer.zero_grad()
                 dis_fake_loss = dis_loss_fn(dis_fake_outputs, dis_target_outputs)
@@ -177,7 +177,7 @@ def train():
 
                 dis_optimizer.zero_grad()
 
-                dis_real_outputs = discriminator(real_x)
+                dis_real_outputs = discriminator(real_x).squeeze()
                 dis_target_labels = torch.ones(dis_real_outputs.shape[0]).to(
                     dtype=torch.int64
                 )
@@ -190,7 +190,7 @@ def train():
 
                 if (
                     dis_real_loss + dis_fake_loss
-                ) < skip_gen_train_until or max_gen_skip_count >= 10:
+                ) < skip_gen_train_until or max_gen_skip_count >= 2:
                     skip_gen_train = False
                     max_gen_skip_count = 0
             else:
@@ -213,7 +213,7 @@ def train():
 
             with torch.no_grad():
                 generator.eval()
-                fake_single = generate_fake_single(generator, generator_noise_dim, torch.Tensor([0]))
+                fake_single = generate_fake_single(generator, noise_dims, torch.Tensor([0]))
                 show_img(fake_single)
 
 if __name__ == "__main__":
