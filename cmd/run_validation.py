@@ -8,6 +8,7 @@ import experiment.models
 import lightning as L
 import numpy as np
 import optuna
+import torch
 
 from dataset.hard_policy import HardPolicy
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
@@ -137,13 +138,15 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
     with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
         mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
         rng.set_seed(SEED)
+        datamodule.batch_size = best_params["batch_size"]
+        datamodule.setup(stage="fit")
         params = {k: v for k, v in best_params.items() if k != "batch_size"}
         retrain_model = ModelClass(
             datamodule.dataset.n_classes, **params, class_weights=datamodule.train_class_weights
         )
         retrain_cb = BestSnapshotCallback(prefix="retrain_")
         retrain_trainer = create_trainer(
-            retrain_run, max_epochs=best_epoch, precision=GPU_PRECISION, callbacks=[retrain_cb]
+            retrain_run, max_epochs=best_epoch + 1, precision=GPU_PRECISION, callbacks=[retrain_cb]
         )
         retrain_trainer.fit(retrain_model, datamodule=datamodule)
 
