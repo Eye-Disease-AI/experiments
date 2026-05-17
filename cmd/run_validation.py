@@ -11,7 +11,8 @@ import optuna
 
 from dataset.hard_policy import HardPolicy
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
-from experiment.common_config import EPOCHS, EXPERIMENT_NAME, OPTUNA_METRIC
+from experiment.best_snapshot import BestSnapshotCallback
+from experiment.common_config import EPOCHS, EXPERIMENT_NAME
 from experiment.models.convnext import ConvNext
 from experiment.data import MyDataModule, SubsetTransformer
 from experiment.models.base import ModelBase
@@ -69,18 +70,11 @@ PRE_ROT_SIZE = 275
 
 best_params = study.best_params
 _agg = min if OPTUNA_DIRECTION == "min" else max
-print(f"best_params={best_params} hard_policy={HARD_POLICY.name}")
-
-
-class _BestMetricCallback(L.Callback):
-    def __init__(self):
-        self.best = None
-
-    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
-        v = trainer.callback_metrics.get(OPTUNA_METRIC)
-        if v is not None:
-            v = v.item()
-            self.best = _agg(v, self.best) if self.best is not None else v
+best_epoch = _agg(
+    study.best_trial.intermediate_values,
+    key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
+)
+print(f"best_params={best_params} best_epoch={best_epoch} hard_policy={HARD_POLICY.name}")
 
 
 def train_and_validate(dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset, seed, best_params, run):
@@ -93,17 +87,17 @@ def train_and_validate(dm: MyDataModule, train_sub: NuclearCataractSubset, val_s
     model = ModelClass(
         dm.dataset.n_classes, **params, class_weights=dm.train_class_weights
     )
-    best_cb = _BestMetricCallback()
+    best_cb = BestSnapshotCallback()
     trainer = create_trainer(
         run, max_epochs=EPOCHS, precision=GPU_PRECISION, callbacks=[best_cb]
     )
     trainer.fit(model, datamodule=dm)
-    return {OPTUNA_METRIC: best_cb.best}
+    return best_cb.best_metrics
 
 
 def summarize(results, name):
     print(f"\n=== Summary across {len(results)} {name} ===")
-    for k in results[0]:
+    for k in sorted(results[0]):
         vals = np.array([r[k] for r in results])
         print(
             f"  {k}: mean={vals.mean():.4f}  std={vals.std():.4f}  "
@@ -115,7 +109,7 @@ rng = RNG()
 rng.set_seed(SEED)
 
 datamodule = MyDataModule(
-    rng, batch_size=best_params["batch_size"], hard_policy=HARD_POLICY, cache=False
+    rng, batch_size=best_params["batch_size"], hard_policy=HARD_POLICY
 )
 datamodule.setup(stage="fit")
 
@@ -132,6 +126,26 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
         "seed": SEED,
         **({"K": K} if MODE == "kfold" else {"n_seeds": len(SEEDS)}),
     })
+    mlflow.log_metric("best_epoch", best_epoch)
+    best_trial_run_id = study.best_trial.user_attrs.get("mlflow_run_id")
+    if best_trial_run_id:
+        best_run = exp.client.get_run(best_trial_run_id)
+        for k, v in best_run.data.metrics.items():
+            if k.startswith("best_val_"):
+                mlflow.log_metric(k, v)
+
+    with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
+        mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
+        rng.set_seed(SEED)
+        params = {k: v for k, v in best_params.items() if k != "batch_size"}
+        retrain_model = ModelClass(
+            datamodule.dataset.n_classes, **params, class_weights=datamodule.train_class_weights
+        )
+        retrain_cb = BestSnapshotCallback(prefix="retrain_")
+        retrain_trainer = create_trainer(
+            retrain_run, max_epochs=best_epoch, precision=GPU_PRECISION, callbacks=[retrain_cb]
+        )
+        retrain_trainer.fit(retrain_model, datamodule=datamodule)
 
     if MODE == "kfold":
         dataset = NuclearCataractDataset(
@@ -146,8 +160,8 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
             with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
                 mlflow.set_tag("fold", i)
                 mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
+                mlflow.set_tag("validation_sample", "true")
                 m = train_and_validate(datamodule, train_sub, val_sub, SEED, best_params, child_run)
-                mlflow.log_metrics(m)
             results.append(m)
         summarize(results, "folds")
     elif MODE == "seeds":
@@ -162,16 +176,10 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
             print(f"\n--- Seed {s} ({i + 1}/{len(SEEDS)}) ---")
             with mlflow.start_run(run_name=f"seed-{s}", nested=True) as child_run:
                 mlflow.set_tag("seed", s)
+                mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
+                mlflow.set_tag("validation_sample", "true")
                 m = train_and_validate(datamodule, train_sub, val_sub, s, best_params, child_run)
-                mlflow.log_metrics(m)
             results.append(m)
         summarize(results, "seeds")
     else:
         raise ValueError(f"unknown MODE: {MODE}")
-
-    summary_metrics = {}
-    for k in results[0]:
-        vals = np.array([r[k] for r in results])
-        summary_metrics[f"mean_{k}"] = float(vals.mean())
-        summary_metrics[f"std_{k}"] = float(vals.std())
-    mlflow.log_metrics(summary_metrics)

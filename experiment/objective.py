@@ -7,6 +7,7 @@ from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
+from experiment.best_snapshot import BestSnapshotCallback
 from experiment.common_config import (
     BACKBONE_UNFREEZE_EPOCHS,
     BACKBONE_UNFREEZE_PATIENCE,
@@ -30,6 +31,7 @@ def create_trainer(run, optuna_callback=None, **kwargs):
     mlf_logger = MLFlowLogger(
         run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
     )
+    extra_callbacks = kwargs.pop("callbacks", [])
     callbacks = []
 
     if optuna_callback is not None:
@@ -47,6 +49,7 @@ def create_trainer(run, optuna_callback=None, **kwargs):
             patience=BACKBONE_UNFREEZE_PATIENCE,
             mode=OPTUNA_DIRECTION,
         ))
+    callbacks.extend(extra_callbacks)
     defaults = dict(
         max_epochs=EPOCHS,
         accelerator="auto",
@@ -197,6 +200,7 @@ def objective(
         trial.set_user_attr("mlflow_run_id", run.info.run_id)
         mlflow.set_tag("optuna_study", exp.study.study_name)  # pyright: ignore
         mlflow.set_tag("optuna_trial", trial.number)
+        mlflow.set_tag("validation_sample", "true")
         mlflow.log_params(
             {
                 "lr": lr,
@@ -213,7 +217,10 @@ def objective(
             run_id=run.info.run_id,
             log_every_n_epochs=LOG_EVERY_N_EPOCHS,
         )
-        trainer = create_trainer(run, optuna_callback=optuna_callback)
+        best_snapshot = BestSnapshotCallback()
+        trainer = create_trainer(
+            run, optuna_callback=optuna_callback, callbacks=[best_snapshot]
+        )
 
         trainer.fit(model, datamodule=datamodule)
 
