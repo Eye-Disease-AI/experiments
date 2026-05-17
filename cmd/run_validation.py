@@ -7,6 +7,7 @@ import experiment.common_config
 import experiment.models
 import numpy as np
 import optuna
+import torch
 
 from dataset.hard_policy import HardPolicy
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
