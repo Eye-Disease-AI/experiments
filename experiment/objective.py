@@ -31,8 +31,8 @@ def create_trainer(run, optuna_callback=None, **kwargs):
     mlf_logger = MLFlowLogger(
         run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
     )
-    extra_callbacks = kwargs.pop("callbacks", [])
-    callbacks = []
+    extra_callbacks: list[Callback] = kwargs.pop("callbacks", [])
+    callbacks: list[Callback] = []
 
     if optuna_callback is not None:
         callbacks.append(optuna_callback)
@@ -63,7 +63,7 @@ def create_trainer(run, optuna_callback=None, **kwargs):
         deterministic=True,
     )
     defaults.update(kwargs)
-    return L.Trainer(**defaults)
+    return L.Trainer(**defaults)  # pyright: ignore
 
 class OptunaMLflowCallback(Callback):
     """Reports val_loss to Optuna each epoch and handles pruning + batched MLflow logging."""
@@ -93,7 +93,9 @@ class OptunaMLflowCallback(Callback):
             )
             self.buffer.clear()
 
-    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
+    def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
+        if trainer.sanity_checking:
+            return
         metric_val = trainer.callback_metrics.get(OPTUNA_METRIC)
         if metric_val is None:
             return
@@ -132,7 +134,9 @@ class BackboneFreezeCallback(Callback):
             for p in m.parameters():
                 p.requires_grad = False
 
-    def on_validation_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
+    def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
+        if trainer.sanity_checking:
+            return
         if self._unfrozen:
             return
         val = trainer.callback_metrics.get(self.monitor)
