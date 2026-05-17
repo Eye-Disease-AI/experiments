@@ -79,7 +79,7 @@ print(f"best_params={best_params} best_epoch={best_epoch} hard_policy={HARD_POLI
 
 
 def train_and_validate(dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset, seed, best_params, run):
-    L.seed_everything(seed, workers=True)
+    rng.set_seed(seed)
     dm.train_set = SubsetTransformer(train_sub, transform=dm.transform)
     dm.val_set = SubsetTransformer(val_sub, transform=dm.val_transform)
     dm.train_class_weights = train_sub.class_weights()
