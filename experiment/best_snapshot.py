@@ -12,7 +12,9 @@ class BestSnapshotCallback(L.Callback):
         self._best_target = None
         self._agg = max if OPTUNA_DIRECTION == "max" else min
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
+        if trainer.sanity_checking:
+            return
         v = trainer.callback_metrics.get(OPTUNA_METRIC)
         if v is None:
             return
