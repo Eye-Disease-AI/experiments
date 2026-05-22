@@ -3,7 +3,7 @@ import numpy as np
 from scipy import stats
 import sys
 from lib.mlflow_setup import Experiment
-from experiment.common_config import *
+from experiment import common_config
 
 def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     mlflow_exp = exp.client.get_experiment_by_name(exp.experiment_name)
@@ -69,24 +69,24 @@ def bootstrap_ci(values: list[float], n_bootstrap=10_000, ci=0.95) -> dict:
 
 
 if __name__ == "__main__":
-    STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search5"
+    STUDY_NAME = f"{common_config.EXPERIMENT_NAME}/lr-search5"
     if len(sys.argv) > 1:
         STUDY_NAME=sys.argv[1]
-    exp = Experiment(EXPERIMENT_NAME)
+    exp = Experiment(common_config.EXPERIMENT_NAME)
     mlflow.set_tracking_uri("http://localhost:5000")
     trial_metrics = get_trial_vals(exp, STUDY_NAME)
 
     if not trial_metrics:
         print("No completed trials found.")
     else:
-        print(f"Optimized metric: {OPTUNA_METRIC}")
+        print(f"Optimized metric: {common_config.OPTUNA_METRIC}")
         all_metric_names = sorted({k for m in trial_metrics for k in m})
         for metric_name in all_metric_names:
             vals = [m[metric_name] for m in trial_metrics if metric_name in m]
             if not vals:
                 continue
             ci = bootstrap_ci(vals)
-            marker = " (The optimized metric)" if metric_name == OPTUNA_METRIC else ""
+            marker = " (The optimized metric)" if metric_name == common_config.OPTUNA_METRIC else ""
             rows = [
                 ("Values:", f"{[f'{x:.4f}' for x in vals[:10]]}..."),
                 ("Trials:", f"{ci['n']}"),

@@ -8,19 +8,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
 from experiment.best_snapshot import BestSnapshotCallback
-from experiment.common_config import (
-    BACKBONE_UNFREEZE_EPOCHS,
-    BACKBONE_UNFREEZE_PATIENCE,
-    EARLY_STOPPING_PATIENCE,
-    EPOCHS,
-    GPU_PRECISION,
-    LOG_EVERY_N_EPOCHS,
-    OPTUNA_DIRECTION,
-    OPTUNA_METRIC,
-    SEED,
-    USE_EARLY_STOPPING,
-    USE_FREEZING,
-)
+from experiment import common_config
 from lib.log_silencer import stop_logs
 from lib.mlflow_setup import Experiment
 from lib.reproducibility import RNG
@@ -36,20 +24,20 @@ def create_trainer(run, optuna_callback=None, **kwargs):
     if optuna_callback is not None:
         callbacks.append(optuna_callback)
 
-    if USE_EARLY_STOPPING:
+    if common_config.USE_EARLY_STOPPING:
         callbacks.append(EarlyStopping(
-            monitor=OPTUNA_METRIC,
-            patience=EARLY_STOPPING_PATIENCE,
-            mode=OPTUNA_DIRECTION,
+            monitor=common_config.OPTUNA_METRIC,
+            patience=common_config.EARLY_STOPPING_PATIENCE,
+            mode=common_config.OPTUNA_DIRECTION,
         ))
-    if USE_FREEZING:
+    if common_config.USE_FREEZING:
         callbacks.append(BackboneFreezeCallback(
-            monitor=OPTUNA_METRIC,
-            patience=BACKBONE_UNFREEZE_PATIENCE,
-            mode=OPTUNA_DIRECTION,
+            monitor=common_config.OPTUNA_METRIC,
+            patience=common_config.BACKBONE_UNFREEZE_PATIENCE,
+            mode=common_config.OPTUNA_DIRECTION,
         ))
     defaults = dict(
-        max_epochs=EPOCHS,
+        max_epochs=common_config.EPOCHS,
         accelerator="auto",
         logger=mlf_logger,
         callbacks=callbacks,
@@ -57,7 +45,7 @@ def create_trainer(run, optuna_callback=None, **kwargs):
         enable_model_summary=False,
         enable_checkpointing=False, # checkpointing required if logging models
         log_every_n_steps=1,
-        precision=GPU_PRECISION,
+        precision=common_config.GPU_PRECISION,
         deterministic=True,
     )
     defaults.update(kwargs)
@@ -85,7 +73,7 @@ class OptunaMLflowCallback(Callback):
             self.exp.client.log_batch(
                 self.run_id,
                 metrics=[
-                    mlflow.entities.Metric(OPTUNA_METRIC, val, ts, e)
+                    mlflow.entities.Metric(common_config.OPTUNA_METRIC, val, ts, e)
                     for e, val, ts in self.buffer
                 ],  # pyright: ignore
             )
@@ -94,7 +82,7 @@ class OptunaMLflowCallback(Callback):
     def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
         if trainer.sanity_checking:
             return
-        metric_val = trainer.callback_metrics.get(OPTUNA_METRIC)
+        metric_val = trainer.callback_metrics.get(common_config.OPTUNA_METRIC)
         if metric_val is None:
             return
         epoch = trainer.current_epoch
@@ -104,7 +92,7 @@ class OptunaMLflowCallback(Callback):
             self._flush()
 
         v = metric_val.item()
-        agg = min if OPTUNA_DIRECTION == "min" else max
+        agg = min if common_config.OPTUNA_DIRECTION == "min" else max
         self.best_value = agg(v, self.best_value) if self.best_value is not None else v
 
         self.trial.report(v, epoch)
@@ -141,8 +129,8 @@ class BackboneFreezeCallback(Callback):
         if val is None:
             return
         v = val.item()
-        if BACKBONE_UNFREEZE_PATIENCE <= 0:
-            if self._wait  == BACKBONE_UNFREEZE_EPOCHS:
+        if common_config.BACKBONE_UNFREEZE_PATIENCE <= 0:
+            if self._wait  == common_config.BACKBONE_UNFREEZE_EPOCHS:
                 self.unfreeze(trainer, pl_module)
             self._wait += 1
         else:
@@ -180,7 +168,7 @@ def objective(
     trial: optuna.trial.Trial,
     ModelClass,
 ):
-    rng.set_seed(SEED)
+    rng.set_seed(common_config.SEED)
 
     lr = trial.suggest_float("lr", 1e-5, 5e-5, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True)
@@ -209,7 +197,7 @@ def objective(
                 "weight_decay": weight_decay,
                 "dropout": dropout,
                 "batch_size": batch_size,
-                "seed": SEED,
+                "seed": common_config.SEED,
                 "model": str(model),
             }
         )
@@ -217,7 +205,7 @@ def objective(
             trial=trial,
             exp=exp,
             run_id=run.info.run_id,
-            log_every_n_epochs=LOG_EVERY_N_EPOCHS,
+            log_every_n_epochs=common_config.LOG_EVERY_N_EPOCHS,
         )
         best_snapshot = BestSnapshotCallback()
         trainer = create_trainer(

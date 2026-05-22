@@ -1,19 +1,17 @@
 import ast
 import importlib
 import pkgutil
-
+import re
+from dataset.hard_policy import HardPolicy
 import mlflow
-import experiment.common_config
 import experiment.models
 import numpy as np
 import optuna
-import torch
 
-from dataset.hard_policy import HardPolicy
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
 from experiment.best_snapshot import BestSnapshotCallback
-from experiment.common_config import EPOCHS, EXPERIMENT_NAME
-from experiment.models.convnext import ConvNext
+from experiment import common_config
+from experiment.models import *
 from experiment.data import MyDataModule, SubsetTransformer
 from experiment.models.base import ModelBase
 from experiment.objective import create_trainer
@@ -27,7 +25,7 @@ for _, _name, _ in pkgutil.iter_modules(experiment.models.__path__):
 MODEL_CLASSES = {cls.__name__: cls for cls in ModelBase.__subclasses__()}
 
 SHA = get_git_sha()
-STUDY_TO_VERIFY = f"{EXPERIMENT_NAME}/convnext-search_{SHA}"
+STUDY_TO_VERIFY = f"{common_config.EXPERIMENT_NAME}/convnext-search_{SHA}"
 if __name__ == "__main__":
     if len(sys.argv)>1:
         STUDY_TO_VERIFY = sys.argv[1]
@@ -42,15 +40,26 @@ def parse_logged(v):
         return ast.literal_eval(v)
     except (ValueError, SyntaxError):
         return v
+    
+def coerce_config(current, v):
+    print(type(current), type(v))
+    if isinstance(current, str):
+        return v
+    if isinstance(current, (int, float, list, dict, tuple)):
+        return ast.literal_eval(v)
+    print(current, v)
+    if v.startswith("<class"):
+        class_re = re.compile(r"<class '([\w.]+)'>")
+        m = class_re.fullmatch(v)
+        if not m:
+            return current
+        mod, _, name = m.group(1).rpartition(".")
+        return getattr(importlib.import_module(mod), name)
+    return v
 
-
-exp = Experiment(EXPERIMENT_NAME)
+exp = Experiment(common_config.EXPERIMENT_NAME)
 study = optuna.load_study(study_name=STUDY_TO_VERIFY, storage=exp.storage)
-
 logged_config = study.user_attrs.get("config") or {}
-ModelClass = ConvNext
-print(f"model_class={ModelClass.__name__}")
-
 config_changed = {
     k: (logged_config.get(k), CONFIG_PARAMS.get(k))
     for k in set(logged_config) | set(CONFIG_PARAMS)
@@ -61,20 +70,21 @@ if config_changed:
     for k, (logged, current) in config_changed.items():
         print(f"  {k}: logged={logged}  current={current}")
 
-SEED = 2137
-GPU_PRECISION = experiment.common_config.GPU_PRECISION
-OPTUNA_DIRECTION = experiment.common_config.OPTUNA_DIRECTION
-HARD_POLICY = HardPolicy.DOMINATE
-PRE_ROT_SIZE = 275
+for k, v in logged_config.items():
+    if not hasattr(common_config, k):
+        continue
+    print(k)
+    setattr(common_config, k, coerce_config(getattr(common_config, k), v))
+ModelClass = getattr(experiment.models, study.user_attrs["model_class"])
 
 best_params = study.best_params
-_agg = min if OPTUNA_DIRECTION == "min" else max
+_agg = min if common_config.OPTUNA_DIRECTION == "min" else max
 best_epoch = _agg(
     study.best_trial.intermediate_values,
     key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
-)
-print(f"best_params={best_params} best_epoch={best_epoch} hard_policy={HARD_POLICY.name}")
-
+)  # type: ignore
+hard_policy = study.user_attrs.get('hard_policy')
+print(f"best_params={best_params} best_epoch={best_epoch} hard_policy={hard_policy}")
 
 def train_and_validate(dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset, seed, best_params, run):
     rng.set_seed(seed)
@@ -88,7 +98,7 @@ def train_and_validate(dm: MyDataModule, train_sub: NuclearCataractSubset, val_s
     )
     best_cb = BestSnapshotCallback()
     trainer = create_trainer(
-        run, max_epochs=EPOCHS, precision=GPU_PRECISION, callbacks=[best_cb]
+        run, max_epochs=common_config.EPOCHS, precision=common_config.GPU_PRECISION, callbacks=[best_cb]
     )
     trainer.fit(model, datamodule=dm)
     return best_cb.best_metrics
@@ -105,10 +115,10 @@ def summarize(results, name):
 
 
 rng = RNG()
-rng.set_seed(SEED)
+rng.set_seed(common_config.SEED)
 
 datamodule = MyDataModule(
-    rng, batch_size=best_params["batch_size"], hard_policy=HARD_POLICY
+    rng, batch_size=best_params["batch_size"], hard_policy=HardPolicy[hard_policy]
 )
 datamodule.setup(stage="fit")
 
@@ -121,8 +131,8 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
     mlflow.set_tag("mode", MODE)
     mlflow.log_params({
         **best_params,
-        "hard_policy": HARD_POLICY.name,
-        "seed": SEED,
+        "hard_policy": hard_policy,
+        "seed": common_config.SEED,
         **({"K": K} if MODE == "kfold" else {"n_seeds": len(SEEDS)}),
     })
     mlflow.log_metric("best_epoch", best_epoch)
@@ -135,7 +145,7 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
 
     with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
         mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
-        rng.set_seed(SEED)
+        rng.set_seed(common_config.SEED)
         datamodule.batch_size = best_params["batch_size"]
         datamodule.setup(stage="fit")
         params = {k: v for k, v in best_params.items() if k != "batch_size"}
@@ -144,15 +154,15 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
         )
         retrain_cb = BestSnapshotCallback(prefix="retrain_")
         retrain_trainer = create_trainer(
-            retrain_run, max_epochs=best_epoch + 1, precision=GPU_PRECISION, callbacks=[retrain_cb]
+            retrain_run, max_epochs=best_epoch + 1, precision=common_config.GPU_PRECISION, callbacks=[retrain_cb]
         )
         retrain_trainer.fit(retrain_model, datamodule=datamodule)
 
     if MODE == "kfold":
         dataset = NuclearCataractDataset(
             NuclearCataractDataset.KFoldCVMode(K),
-            cache_size=PRE_ROT_SIZE,
-            hard_policy=HARD_POLICY,
+            cache_size=common_config.CACHE_SIZE,
+            hard_policy=HardPolicy[hard_policy],
         )
         for i in range(K):
             train_sub = dataset.fold_train_set(i)
@@ -162,14 +172,14 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
                 mlflow.set_tag("fold", i)
                 mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
                 mlflow.set_tag("validation_sample", "true")
-                m = train_and_validate(datamodule, train_sub, val_sub, SEED, best_params, child_run)
+                m = train_and_validate(datamodule, train_sub, val_sub, common_config.SEED, best_params, child_run)
             results.append(m)
         summarize(results, "folds")
     elif MODE == "seeds":
         dataset = NuclearCataractDataset(
             NuclearCataractDataset.TrainValMode(0.8, 0.2),
-            cache_size=PRE_ROT_SIZE,
-            hard_policy=HARD_POLICY,
+            cache_size=common_config.CACHE_SIZE,
+            hard_policy=HardPolicy[hard_policy],
         )
         train_sub = dataset.train_set()
         val_sub = dataset.val_set()

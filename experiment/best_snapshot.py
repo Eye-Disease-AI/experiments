@@ -1,7 +1,7 @@
 import lightning as L
 import mlflow
 
-from experiment.common_config import OPTUNA_DIRECTION, OPTUNA_METRIC
+from experiment import common_config
 
 
 class BestSnapshotCallback(L.Callback):
@@ -10,12 +10,12 @@ class BestSnapshotCallback(L.Callback):
         self.best_metrics = {}
         self.best_epoch = None
         self._best_target = None
-        self._agg = max if OPTUNA_DIRECTION == "max" else min
+        self._agg = max if common_config.OPTUNA_DIRECTION == "max" else min
 
     def on_validation_end(self, trainer, pl_module):
         if trainer.sanity_checking:
             return
-        v = trainer.callback_metrics.get(OPTUNA_METRIC)
+        v = trainer.callback_metrics.get(common_config.OPTUNA_METRIC)
         if v is None:
             return
         v = v.item()
