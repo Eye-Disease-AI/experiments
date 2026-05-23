@@ -8,6 +8,7 @@ import experiment.models
 import numpy as np
 import optuna
 
+from lib.reproducibility import get_git_sha
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
 from experiment.best_snapshot import BestSnapshotCallback
 from experiment import common_config
@@ -25,14 +26,15 @@ for _, _name, _ in pkgutil.iter_modules(experiment.models.__path__):
 MODEL_CLASSES = {cls.__name__: cls for cls in ModelBase.__subclasses__()}
 
 SHA = get_git_sha()
-STUDY_TO_VERIFY = f"{common_config.EXPERIMENT_NAME}/convnext-search_{SHA}"
-if __name__ == "__main__":
-    if len(sys.argv)>1:
-        STUDY_TO_VERIFY = sys.argv[1]
-
+if len(sys.argv)>1:
+    STUDY_TO_VERIFY = sys.argv[1]
+else:
+    print(f"usage: {sys.argv[0]} <study_name>")
+    exit(1)
 MODE = "kfold"  # "kfold" or "seeds"
 K = 5
 SEEDS = list(range(10))
+VALIDATION_STUDY_NAME = f"{STUDY_TO_VERIFY}/validation_{MODE}_" + SHA
 
 
 def parse_logged(v):
@@ -42,7 +44,6 @@ def parse_logged(v):
         return v
     
 def coerce_config(current, v):
-    print(type(current), type(v))
     if isinstance(current, str):
         return v
     if isinstance(current, (int, float, list, dict, tuple)):
@@ -123,8 +124,6 @@ datamodule = MyDataModule(
 datamodule.setup(stage="fit")
 
 results = []
-VALIDATION_STUDY_NAME = f"{STUDY_TO_VERIFY}/validation_{MODE}"
-
 with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
     mlflow.set_tag("study_name", STUDY_TO_VERIFY)
     mlflow.set_tag("model_class", ModelClass.__name__)
