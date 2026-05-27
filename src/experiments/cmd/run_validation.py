@@ -5,18 +5,18 @@ import pkgutil
 import re
 from dataset.hard_policy import HardPolicy
 import mlflow
-import experiment.models
+import experiments.experiment.models
 import numpy as np
 import optuna
 
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
-from experiment.best_snapshot import BestSnapshotCallback
-from experiment import common_config
-from experiment.data import MyDataModule, SubsetTransformer
-from experiment.objective import create_trainer
-from experiment.run_study import CONFIG_PARAMS
-from lib.mlflow_setup import Experiment
-from lib.reproducibility import RNG, get_git_sha
+from experiments.experiment.best_snapshot import BestSnapshotCallback
+from experiments.experiment import common_config
+from experiments.experiment.data import MyDataModule, SubsetTransformer
+from experiments.experiment.objective import create_trainer
+from experiments.experiment.run_study import CONFIG_PARAMS
+from experiments.lib.mlflow_setup import Experiment
+from experiments.lib.reproducibility import RNG, get_git_sha
 
 def parse_logged(v):
     try:

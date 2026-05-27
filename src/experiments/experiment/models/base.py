@@ -18,7 +18,7 @@ from torchmetrics.classification import (
 )
 
 
-from experiment import common_config
+from experiments.experiment import common_config
 
 
 class ModelBase(L.LightningModule):
@@ -131,5 +131,5 @@ class ModelBase(L.LightningModule):
                 T_max=common_config.SCHEDULER_MAX_T,
             )
             return ([optimizer], [scheduler])
-        
+
         return optimizer

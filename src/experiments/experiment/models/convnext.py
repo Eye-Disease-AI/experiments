@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 
-from experiment.models.base import ModelBase
+from experiments.experiment.models.base import ModelBase
 
 
 class ConvNext(ModelBase):

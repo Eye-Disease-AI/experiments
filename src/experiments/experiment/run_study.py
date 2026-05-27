@@ -1,21 +1,22 @@
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
-from experiment.data import MyDataModule
+from experiments.experiment.data import MyDataModule
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
     plot_optimization_history,
     plot_param_importances,
 )
-from experiment import common_config
-from experiment.objective import create_trainer, objective
-from lib.mlflow_setup import Experiment
-from lib.reproducibility import RNG
+from experiments.experiment import common_config
+from experiments.experiment.objective import create_trainer, objective
+from experiments.lib.mlflow_setup import Experiment
+from experiments.lib.reproducibility import RNG
 
 
 CONFIG_PARAMS = {
-    k: str(v) for k, v in vars(common_config).items()
+    k: str(v)
+    for k, v in vars(common_config).items()
     if k.isupper() and not k.startswith("_")
 }
 
@@ -26,7 +27,7 @@ def run_study(
     exp: Experiment,
     rng: RNG,
     datamodule: MyDataModule,
-    retrain = True,
+    retrain=True,
 ):
     study = optuna.create_study(
         study_name=study_name,
