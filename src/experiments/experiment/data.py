@@ -2,12 +2,14 @@ import math
 import os
 
 import lightning as L
+import numpy as np
 import torch
+from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
 from dataset.loader import NuclearCataractDataset, HardPolicy
-from experiment import common_config
-from lib.reproducibility import RNG
+from experiments.experiment import common_config
+from experiments.lib.reproducibility import RNG
 import numpy as np
 
 data_path = "data"
@@ -47,7 +49,14 @@ class SubsetTransformer(torch.utils.data.Dataset):
 class MyDataModule(L.LightningDataModule):
     """Splits to train/val/test subsets with custom transforms"""
 
-    def __init__(self, rng: RNG, batch_size: int = 32, return_paths=False, cache=True, hard_policy=HardPolicy.PASSTHROUGH):
+    def __init__(
+        self,
+        rng: RNG,
+        batch_size: int = 32,
+        return_paths=False,
+        cache=True,
+        hard_policy=HardPolicy.PASSTHROUGH,
+    ):
         super().__init__()
         self.dir = DATASET_PATH
         self.image_size = common_config.IMAGE_SIZE
@@ -71,7 +80,7 @@ class MyDataModule(L.LightningDataModule):
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
                 pre_rot_size if self.do_cache else None,
                 self.return_paths,
-                hard_policy=self.hard_policy
+                hard_policy=self.hard_policy,
             )
 
         if not hasattr(self, "test_dataset"):
@@ -79,10 +88,15 @@ class MyDataModule(L.LightningDataModule):
                 NuclearCataractDataset.TestMode(),
                 pre_rot_size if self.do_cache else None,
                 self.return_paths,
-                hard_policy=self.hard_policy
+                hard_policy=self.hard_policy,
             )
         train_transforms = [
-            transformsv2.Resize((int(np.ceil(self.image_size*1.5)), int(np.ceil(self.image_size*1.5)))),
+            transformsv2.Resize(
+                (
+                    int(np.ceil(self.image_size * 1.5)),
+                    int(np.ceil(self.image_size * 1.5)),
+                )
+            ),
             transformsv2.RandomHorizontalFlip(0.5),
             transformsv2.RandomRotation(15),
             transformsv2.Resize((self.image_size, self.image_size)),
@@ -91,10 +105,10 @@ class MyDataModule(L.LightningDataModule):
         if common_config.NORMALIZE:
             train_transforms.append(transformsv2.Normalize(mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD))
         self.transform = transformsv2.Compose(train_transforms)
-                                              
+
         val_transforms = [
-                transformsv2.Resize((self.image_size, self.image_size)),
-                transformsv2.ConvertImageDtype(),
+            transformsv2.Resize((self.image_size, self.image_size)),
+            transformsv2.ConvertImageDtype(),
         ]
         if common_config.NORMALIZE:
             val_transforms.append(transformsv2.Normalize(mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD))

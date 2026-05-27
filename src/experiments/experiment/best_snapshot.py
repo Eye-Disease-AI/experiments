@@ -1,7 +1,7 @@
 import lightning as L
 import mlflow
 
-from experiment import common_config
+from experiments.experiment import common_config
 
 
 class BestSnapshotCallback(L.Callback):
