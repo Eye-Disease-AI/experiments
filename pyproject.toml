@@ -22,6 +22,9 @@ dependencies = [
     "torchvision>=0.26.0",
 ]
 
+[project.scripts]
+all = "experiments.cmd.run_all:main"
+
 [tool.basedpyright]
 typeCheckingMode = "basic"
 reportPrivateImportUsage = false

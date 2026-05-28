@@ -13,15 +13,21 @@ SHA = get_git_sha()
 
 MODELS = [(ConvNext, f"{EXPERIMENT_NAME}/convnext-search_{SHA}")]
 
-rng = RNG()
-rng.set_seed(SEED)
-exp = Experiment(EXPERIMENT_NAME)
 
-datamodule = MyDataModule(rng, hard_policy=HardPolicy.DOMINATE)
-datamodule.prepare_data()
+def main():
+    rng = RNG()
+    rng.set_seed(SEED)
+    exp = Experiment(EXPERIMENT_NAME)
 
-for ModelClass, study_name in MODELS:
-    print(f"\n{'=' * 60}")
-    print(f"Model: {ModelClass.__name__}, Study: {study_name}")
-    print(f"{'=' * 60}\n")
-    run_study(ModelClass, study_name, exp, rng, datamodule)
+    datamodule = MyDataModule(rng, hard_policy=HardPolicy.DOMINATE)
+    datamodule.prepare_data()
+
+    for ModelClass, study_name in MODELS:
+        print(f"\n{'=' * 60}")
+        print(f"Model: {ModelClass.__name__}, Study: {study_name}")
+        print(f"{'=' * 60}\n")
+        run_study(ModelClass, study_name, exp, rng, datamodule)
+
+
+if __name__ == "__main__":
+    main()
