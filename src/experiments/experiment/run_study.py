@@ -4,7 +4,6 @@ import lightning as L
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
-from experiment.data import MyDataModule
 from lightning.pytorch.callbacks import ModelCheckpoint
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
@@ -13,8 +12,8 @@ from optuna.visualization.matplotlib import (
     plot_param_importances,
 )
 
-from experiment import common_config
-from experiment.common_config import (
+from experiments.experiment import common_config
+from experiments.experiment.common_config import (
     BACKBONE_UNFREEZE_PATIENCE,
     GPU_PRECISION,
     MAX_TRIALS,
@@ -22,14 +21,16 @@ from experiment.common_config import (
     OPTUNA_METRIC,
     SEED,
 )
+from experiments.experiment.data import MyDataModule
+from experiments.experiment.objective import create_trainer, objective
+from experiments.lib.mlflow_setup import Experiment, save_model
+from experiments.lib.reproducibility import RNG
 
 CONFIG_PARAMS = {
-    k: str(v) for k, v in vars(common_config).items()
+    k: str(v)
+    for k, v in vars(common_config).items()
     if k.isupper() and not k.startswith("_")
 }
-from experiment.objective import create_trainer, objective
-from lib.mlflow_setup import Experiment, save_model
-from lib.reproducibility import RNG
 
 
 def run_study(
@@ -38,7 +39,7 @@ def run_study(
     exp: Experiment,
     rng: RNG,
     datamodule: MyDataModule,
-    retrain = True,
+    retrain=True,
 ):
     study = optuna.create_study(
         study_name=study_name,
@@ -122,13 +123,15 @@ def run_study(
                 )
                 trainer = create_trainer(
                     run=parent_run,
-                    max_epochs=best_epoch+1,
+                    max_epochs=best_epoch + 1,
                     callbacks=[ckpt_cb],
                 )
                 trainer.fit(best_model, datamodule=datamodule)
 
                 if ckpt_cb.best_model_path:
-                    best_model = ModelClass.load_from_checkpoint(ckpt_cb.best_model_path)
+                    best_model = ModelClass.load_from_checkpoint(
+                        ckpt_cb.best_model_path
+                    )
                 retrain_metric = ckpt_cb.best_model_score
                 if retrain_metric is not None:
                     mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())

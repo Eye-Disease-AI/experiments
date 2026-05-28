@@ -474,7 +474,7 @@ wheels = [
 [[package]]
 name = "dataset"
 version = "0.1.0"
-source = { editable = "dataset" }
+source = { editable = "packages/dataset" }
 dependencies = [
     { name = "ipykernel" },
     { name = "lightning" },
@@ -565,7 +565,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dataset", editable = "dataset" },
+    { name = "dataset", editable = "packages/dataset" },
     { name = "lightning", specifier = ">=2.6.1" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "mlflow", specifier = "==3.12.0" },

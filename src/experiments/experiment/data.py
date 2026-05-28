@@ -2,13 +2,18 @@ import math
 import os
 
 import lightning as L
+import numpy as np
 import torch
+from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
-from dataset.loader import NuclearCataractDataset, HardPolicy
-from experiment.common_config import NORMALIZE_MEAN, NORMALIZE_STD, NORMALIZE, IMAGE_SIZE
-from lib.reproducibility import RNG
-import numpy as np
+from experiments.experiment.common_config import (
+    IMAGE_SIZE,
+    NORMALIZE,
+    NORMALIZE_MEAN,
+    NORMALIZE_STD,
+)
+from experiments.lib.reproducibility import RNG
 
 data_path = "data"
 if not os.path.exists(data_path):
@@ -47,7 +52,14 @@ class SubsetTransformer(torch.utils.data.Dataset):
 class MyDataModule(L.LightningDataModule):
     """Splits to train/val/test subsets with custom transforms"""
 
-    def __init__(self, rng: RNG, batch_size: int = 32, return_paths=False, cache=True, hard_policy=HardPolicy.PASSTHROUGH):
+    def __init__(
+        self,
+        rng: RNG,
+        batch_size: int = 32,
+        return_paths=False,
+        cache=True,
+        hard_policy=HardPolicy.PASSTHROUGH,
+    ):
         super().__init__()
         self.dir = DATASET_PATH
         self.image_size = IMAGE_SIZE
@@ -71,7 +83,7 @@ class MyDataModule(L.LightningDataModule):
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
                 pre_rot_size if self.do_cache else None,
                 self.return_paths,
-                hard_policy=self.hard_policy
+                hard_policy=self.hard_policy,
             )
 
         if not hasattr(self, "test_dataset"):
@@ -79,25 +91,34 @@ class MyDataModule(L.LightningDataModule):
                 NuclearCataractDataset.TestMode(),
                 pre_rot_size if self.do_cache else None,
                 self.return_paths,
-                hard_policy=self.hard_policy
+                hard_policy=self.hard_policy,
             )
         train_transforms = [
-            transformsv2.Resize((int(np.ceil(self.image_size*1.5)), int(np.ceil(self.image_size*1.5)))),
+            transformsv2.Resize(
+                (
+                    int(np.ceil(self.image_size * 1.5)),
+                    int(np.ceil(self.image_size * 1.5)),
+                )
+            ),
             transformsv2.RandomHorizontalFlip(0.5),
             transformsv2.RandomRotation(15),
             transformsv2.Resize((self.image_size, self.image_size)),
             transformsv2.ConvertImageDtype(),
         ]
         if NORMALIZE:
-            train_transforms.append(transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD))
+            train_transforms.append(
+                transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD)
+            )
         self.transform = transformsv2.Compose(train_transforms)
-                                              
+
         val_transforms = [
-                transformsv2.Resize((self.image_size, self.image_size)),
-                transformsv2.ConvertImageDtype(),
+            transformsv2.Resize((self.image_size, self.image_size)),
+            transformsv2.ConvertImageDtype(),
         ]
         if NORMALIZE:
-            val_transforms.append(transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD))
+            val_transforms.append(
+                transformsv2.Normalize(mean=NORMALIZE_MEAN, std=NORMALIZE_STD)
+            )
         self.val_transform = transformsv2.Compose(val_transforms)
 
         if not hasattr(self, "train_set"):

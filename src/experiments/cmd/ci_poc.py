@@ -1,17 +1,18 @@
+import sys
+
 import mlflow
 import numpy as np
 from scipy import stats
-import sys
-from lib.mlflow_setup import Experiment
-from experiment.common_config import *
+
+from experiments.experiment.common_config import *
+
 
 def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     mlflow_exp = exp.client.get_experiment_by_name(exp.experiment_name)
     runs = exp.client.search_runs(
         experiment_ids=[mlflow_exp.experiment_id],  # pyright: ignore
         filter_string=(
-            f"tags.optuna_study = '{study_name}' "
-            f"and tags.validation_sample = 'true'"
+            f"tags.optuna_study = '{study_name}' and tags.validation_sample = 'true'"
         ),
     )
     print(f"Found {len(runs)} validation-sample runs for study '{study_name}'.")
@@ -22,7 +23,7 @@ def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
         sample = {}
         for k, v in r.data.metrics.items():
             if k.startswith("best_val_"):
-                sample[k[len("best_"):]] = v
+                sample[k[len("best_") :]] = v
         if sample:
             result.append(sample)
     return result
@@ -71,7 +72,7 @@ def bootstrap_ci(values: list[float], n_bootstrap=10_000, ci=0.95) -> dict:
 if __name__ == "__main__":
     STUDY_NAME = f"{EXPERIMENT_NAME}/lr-search5"
     if len(sys.argv) > 1:
-        STUDY_NAME=sys.argv[1]
+        STUDY_NAME = sys.argv[1]
     exp = Experiment(EXPERIMENT_NAME)
     mlflow.set_tracking_uri("http://localhost:5000")
     trial_metrics = get_trial_vals(exp, STUDY_NAME)
@@ -93,9 +94,30 @@ if __name__ == "__main__":
                 ("Mean:", f"{ci['mean']:.4f}"),
                 ("Median:", f"{ci['median']:.4f}"),
                 ("Std:", f"{ci['std']:.4f}"),
-                ("Bootstrap 95% CI:", f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]"),
-                ("Z-score 95% CI:", f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]"),
-                ("T-student 95% CI:", f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]"),
+                (
+                    "Bootstrap 95% CI:",
+                    f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]",
+                ),
+                (
+                    "Z-score 95% CI:",
+                    f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]",
+                ),
+                (
+                    "T-student 95% CI:",
+                    f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]",
+                ),
+                (
+                    "Bootstrap 95% CI:",
+                    f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]",
+                ),
+                (
+                    "Z-score 95% CI:",
+                    f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]",
+                ),
+                (
+                    "T-student 95% CI:",
+                    f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]",
+                ),
             ]
             print(f"\n--- {metric_name}{marker} ---")
             w = max(len(r[0]) for r in rows)

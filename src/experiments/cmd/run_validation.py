@@ -1,28 +1,28 @@
 import ast
 import importlib
 import pkgutil
+import sys
 
-import mlflow
-import experiment.common_config
-import experiment.models
 import lightning as L
+import mlflow
 import numpy as np
 import optuna
 import torch
-
 from dataset.hard_policy import HardPolicy
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
-from experiment.best_snapshot import BestSnapshotCallback
-from experiment.common_config import EPOCHS, EXPERIMENT_NAME
-from experiment.models.convnext import ConvNext
-from experiment.data import MyDataModule, SubsetTransformer
-from experiment.models.base import ModelBase
-from experiment.objective import create_trainer
-from experiment.run_study import CONFIG_PARAMS
-from lib.mlflow_setup import Experiment
-from lib.reproducibility import RNG, get_git_sha
 from optuna.exceptions import OptunaError
-import sys
+
+import experiments.experiment.common_config
+import experiments.experiment.models
+from experiments.experiment.best_snapshot import BestSnapshotCallback
+from experiments.experiment.common_config import EPOCHS, EXPERIMENT_NAME
+from experiments.experiment.data import MyDataModule, SubsetTransformer
+from experiments.experiment.models.base import ModelBase
+from experiments.experiment.models.convnext import ConvNext
+from experiments.experiment.objective import create_trainer
+from experiments.experiment.run_study import CONFIG_PARAMS
+from experiments.lib.mlflow_setup import Experiment
+from experiments.lib.reproducibility import RNG, get_git_sha
 
 for _, _name, _ in pkgutil.iter_modules(experiment.models.__path__):
     importlib.import_module(f"experiment.models.{_name}")
@@ -31,7 +31,7 @@ MODEL_CLASSES = {cls.__name__: cls for cls in ModelBase.__subclasses__()}
 SHA = get_git_sha()
 STUDY_TO_VERIFY = f"{EXPERIMENT_NAME}/convnext-search_{SHA}"
 if __name__ == "__main__":
-    if len(sys.argv)>1:
+    if len(sys.argv) > 1:
         STUDY_TO_VERIFY = sys.argv[1]
 
 MODE = "kfold"  # "kfold" or "seeds"
@@ -42,7 +42,7 @@ SEEDS = list(range(10))
 def parse_logged(v):
     try:
         return ast.literal_eval(v)
-    except (ValueError, SyntaxError):
+    except ValueError, SyntaxError:
         return v
 
 
@@ -75,10 +75,19 @@ best_epoch = _agg(
     study.best_trial.intermediate_values,
     key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
 )
-print(f"best_params={best_params} best_epoch={best_epoch} hard_policy={HARD_POLICY.name}")
+print(
+    f"best_params={best_params} best_epoch={best_epoch} hard_policy={HARD_POLICY.name}"
+)
 
 
-def train_and_validate(dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset, seed, best_params, run):
+def train_and_validate(
+    dm: MyDataModule,
+    train_sub: NuclearCataractSubset,
+    val_sub: NuclearCataractSubset,
+    seed,
+    best_params,
+    run,
+):
     rng.set_seed(seed)
     dm.train_set = SubsetTransformer(train_sub, transform=dm.transform)
     dm.val_set = SubsetTransformer(val_sub, transform=dm.val_transform)
@@ -121,12 +130,14 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
     mlflow.set_tag("study_name", STUDY_TO_VERIFY)
     mlflow.set_tag("model_class", ModelClass.__name__)
     mlflow.set_tag("mode", MODE)
-    mlflow.log_params({
-        **best_params,
-        "hard_policy": HARD_POLICY.name,
-        "seed": SEED,
-        **({"K": K} if MODE == "kfold" else {"n_seeds": len(SEEDS)}),
-    })
+    mlflow.log_params(
+        {
+            **best_params,
+            "hard_policy": HARD_POLICY.name,
+            "seed": SEED,
+            **({"K": K} if MODE == "kfold" else {"n_seeds": len(SEEDS)}),
+        }
+    )
     mlflow.log_metric("best_epoch", best_epoch)
     best_trial_run_id = study.best_trial.user_attrs.get("mlflow_run_id")
     if best_trial_run_id:
@@ -142,11 +153,16 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
         datamodule.setup(stage="fit")
         params = {k: v for k, v in best_params.items() if k != "batch_size"}
         retrain_model = ModelClass(
-            datamodule.dataset.n_classes, **params, class_weights=datamodule.train_class_weights
+            datamodule.dataset.n_classes,
+            **params,
+            class_weights=datamodule.train_class_weights,
         )
         retrain_cb = BestSnapshotCallback(prefix="retrain_")
         retrain_trainer = create_trainer(
-            retrain_run, max_epochs=best_epoch + 1, precision=GPU_PRECISION, callbacks=[retrain_cb]
+            retrain_run,
+            max_epochs=best_epoch + 1,
+            precision=GPU_PRECISION,
+            callbacks=[retrain_cb],
         )
         retrain_trainer.fit(retrain_model, datamodule=datamodule)
 
@@ -159,12 +175,16 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
         for i in range(K):
             train_sub = dataset.fold_train_set(i)
             val_sub = dataset.fold_val_set(i)
-            print(f"\n--- Fold {i + 1}/{K}  train={len(train_sub)} val={len(val_sub)} ---")
+            print(
+                f"\n--- Fold {i + 1}/{K}  train={len(train_sub)} val={len(val_sub)} ---"
+            )
             with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
                 mlflow.set_tag("fold", i)
                 mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
                 mlflow.set_tag("validation_sample", "true")
-                m = train_and_validate(datamodule, train_sub, val_sub, SEED, best_params, child_run)
+                m = train_and_validate(
+                    datamodule, train_sub, val_sub, SEED, best_params, child_run
+                )
             results.append(m)
         summarize(results, "folds")
     elif MODE == "seeds":
@@ -181,7 +201,9 @@ with mlflow.start_run(run_name=VALIDATION_STUDY_NAME) as parent_run:
                 mlflow.set_tag("seed", s)
                 mlflow.set_tag("optuna_study", VALIDATION_STUDY_NAME)
                 mlflow.set_tag("validation_sample", "true")
-                m = train_and_validate(datamodule, train_sub, val_sub, s, best_params, child_run)
+                m = train_and_validate(
+                    datamodule, train_sub, val_sub, s, best_params, child_run
+                )
             results.append(m)
         summarize(results, "seeds")
     else:
