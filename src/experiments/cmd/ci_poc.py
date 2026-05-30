@@ -5,6 +5,7 @@ import numpy as np
 from scipy import stats
 
 from experiments.experiment.common_config import *
+from experiments.lib.mlflow_setup import Experiment
 
 
 def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
