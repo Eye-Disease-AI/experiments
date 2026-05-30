@@ -4,6 +4,9 @@ import math
 SEED = 2137
 EXPERIMENT_NAME = "restored-baseline-search"
 MAX_TRIALS = 100
+ # AUROC graphs are generally smoother than ACC or F1.
+ # This makes tracking it more stable like when using loss,
+ # but with AUROC we optimise a meaningful metric, contrary to using loss.
 OPTUNA_METRIC = "val_auroc"
 OPTUNA_DIRECTION = "max"  # "min" or "max"
 
