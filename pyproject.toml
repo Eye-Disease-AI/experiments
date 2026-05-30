@@ -29,5 +29,8 @@ all = "experiments.cmd.run_all:main"
 typeCheckingMode = "basic"
 reportPrivateImportUsage = false
 
+[tool.uv.workspace]
+members = ["packages/*"]
+
 [tool.uv.sources]
-dataset = { path = "packages/dataset", editable = true }
+dataset = { workspace = true }
