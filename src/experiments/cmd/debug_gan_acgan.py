@@ -1,6 +1,6 @@
 import os
+from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,7 +12,10 @@ from torchvision.utils import save_image
 
 from experiments.experiment.data import SubsetTransformer
 
-os.makedirs("images", exist_ok=True)
+ARTIFACTS_DIR_PATH = Path(__file__).resolve().parent.parent.parent.parent / "artifacts"
+IMAGES_DIR_PATH = ARTIFACTS_DIR_PATH / Path("debug_gan_acgan", "images")
+
+os.makedirs(IMAGES_DIR_PATH, exist_ok=True)
 cuda = True if torch.cuda.is_available() else False
 # cuda = False
 img_size = 256
@@ -145,19 +148,6 @@ dataloader = torch.utils.data.DataLoader(
     shuffle=True,
 )
 
-
-def show_imgs(imgs):
-    for i, img in enumerate(imgs):
-        img = img.permute(1, 2, 0)
-        plt.imshow(img.detach().numpy())
-        plt.savefig(f"xd{i}.png")
-
-
-# for b in dataloader:
-#    imgs, labels = b
-#    show_imgs(imgs)
-#    sys.exit(0)
-
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr, betas=(b1, b2))
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr, betas=(b1, b2))
 
@@ -174,7 +164,10 @@ def sample_image(n_row, batches_done):
     labels = Variable(LongTensor(labels))
     gen_imgs = generator(z, labels)
     save_image(
-        gen_imgs.data, "images/%d.png" % batches_done, nrow=n_row, normalize=True
+        gen_imgs.data,
+        IMAGES_DIR_PATH / f"{batches_done}.png",
+        nrow=n_row,
+        normalize=True,
     )
 
 
