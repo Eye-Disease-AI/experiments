@@ -24,8 +24,8 @@ from experiments.experiment.run_study import CONFIG_PARAMS
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.reproducibility import RNG, get_git_sha
 
-for _, _name, _ in pkgutil.iter_modules(experiment.models.__path__):
-    importlib.import_module(f"experiment.models.{_name}")
+for _, _name, _ in pkgutil.iter_modules(experiments.experiment.models.__path__):
+    importlib.import_module(f"experiments.experiment.models.{_name}")
 MODEL_CLASSES = {cls.__name__: cls for cls in ModelBase.__subclasses__()}
 
 SHA = get_git_sha()
@@ -64,8 +64,8 @@ if config_changed:
         print(f"  {k}: logged={logged}  current={current}")
 
 SEED = 2137
-GPU_PRECISION = experiment.common_config.GPU_PRECISION
-OPTUNA_DIRECTION = experiment.common_config.OPTUNA_DIRECTION
+GPU_PRECISION = experiments.experiment.common_config.GPU_PRECISION
+OPTUNA_DIRECTION = experiments.experiment.common_config.OPTUNA_DIRECTION
 HARD_POLICY = HardPolicy.DOMINATE
 PRE_ROT_SIZE = 275
 
