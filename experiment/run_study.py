@@ -1,7 +1,11 @@
+import tempfile
+
 import lightning as L
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
+from experiment.data import MyDataModule
+from lightning.pytorch.callbacks import ModelCheckpoint
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
@@ -9,6 +13,7 @@ from optuna.visualization.matplotlib import (
     plot_param_importances,
 )
 
+from experiment import common_config
 from experiment.common_config import (
     BACKBONE_UNFREEZE_PATIENCE,
     GPU_PRECISION,
@@ -17,9 +22,14 @@ from experiment.common_config import (
     OPTUNA_METRIC,
     SEED,
 )
+
+CONFIG_PARAMS = {
+    k: str(v) for k, v in vars(common_config).items()
+    if k.isupper() and not k.startswith("_")
+}
 from experiment.objective import create_trainer, objective
 from lib.mlflow_setup import Experiment, save_model
-from lib.seed import RNG
+from lib.reproducibility import RNG
 
 
 def run_study(
@@ -27,7 +37,8 @@ def run_study(
     study_name: str,
     exp: Experiment,
     rng: RNG,
-    datamodule: L.LightningDataModule,
+    datamodule: MyDataModule,
+    retrain = True,
 ):
     study = optuna.create_study(
         study_name=study_name,
@@ -37,6 +48,9 @@ def run_study(
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
     )
     exp.study = study
+    study.set_user_attr("model_class", ModelClass.__name__)
+    study.set_user_attr("config", CONFIG_PARAMS)
+    study.set_user_attr("hard_policy", datamodule.hard_policy.name)
 
     n_finished = sum(
         1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
@@ -51,6 +65,8 @@ def run_study(
         study.set_user_attr("mlflow_parent_run_id", parent_run.info.run_id)
         mlflow.set_tag("optuna_study", study_name)
         mlflow.set_tag("model", ModelClass.__name__)
+        mlflow.log_params(CONFIG_PARAMS)
+        mlflow.log_param("hard_policy", datamodule.hard_policy.name)
 
     if n_finished >= MAX_TRIALS:
         print(
@@ -96,19 +112,29 @@ def run_study(
             datamodule.dataset.n_classes, **model_params, class_weights=class_weights
         )  # pyright: ignore
 
+        if retrain:
+            with tempfile.TemporaryDirectory() as ckpt_dir:
+                ckpt_cb = ModelCheckpoint(
+                    dirpath=ckpt_dir,
+                    monitor=OPTUNA_METRIC,
+                    mode=OPTUNA_DIRECTION,
+                    save_top_k=1,
+                )
+                trainer = create_trainer(
+                    run=parent_run,
+                    max_epochs=best_epoch+1,
+                    callbacks=[ckpt_cb],
+                )
+                trainer.fit(best_model, datamodule=datamodule)
 
-        trainer = create_trainer(
-            run=parent_run,
-            max_epochs=best_epoch + 1,
-            callbacks=[],  # override: no Optuna/EarlyStopping/Freeze on retrain
-        )
-        trainer.fit(best_model, datamodule=datamodule)
+                if ckpt_cb.best_model_path:
+                    best_model = ModelClass.load_from_checkpoint(ckpt_cb.best_model_path)
+                retrain_metric = ckpt_cb.best_model_score
+                if retrain_metric is not None:
+                    mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
 
-        retrain_metric = trainer.callback_metrics.get(OPTUNA_METRIC)
-        if retrain_metric is not None:
-            mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
-        example_input, *_ = next(iter(datamodule.val_dataloader()))
-        save_model(best_model, example_input=example_input[:1])
+            example_input, *_ = next(iter(datamodule.val_dataloader()))
+            save_model(best_model, example_input=example_input[:1])
 
         try:
             fig = plot_optimization_history(study)

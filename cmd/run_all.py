@@ -6,14 +6,11 @@ from experiment.models.swin import Swin
 from experiment.models.vit import ViT
 from experiment.run_study import run_study
 from lib.mlflow_setup import Experiment
-from lib.seed import RNG
-
-TRY = 2
+from lib.reproducibility import RNG, get_git_sha
+SHA = get_git_sha()
 
 MODELS = [
-    (ConvNext, f"{EXPERIMENT_NAME}/convnext-search_{TRY}"),
-#    (ViT, f"{EXPERIMENT_NAME}/vit-search_{TRY}"),
-#    (Swin, f"{EXPERIMENT_NAME}/swin-search_{TRY}"),
+    (ConvNext, f"{EXPERIMENT_NAME}/convnext-search_{SHA}")
 ]
 
 rng = RNG()
