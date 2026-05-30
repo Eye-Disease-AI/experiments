@@ -1,7 +1,7 @@
 import lightning as L
 import mlflow
 
-from experiment.common_config import OPTUNA_DIRECTION, OPTUNA_METRIC
+from experiments.experiment.common_config import OPTUNA_DIRECTION, OPTUNA_METRIC
 
 
 class BestSnapshotCallback(L.Callback):
