@@ -65,32 +65,3 @@ class Experiment:
                 cur.execute("CREATE DATABASE optuna")
                 print("Created database 'optuna'.")
         conn.close()
-
-
-def save_model(model, example_input=None):
-    print("saving model")
-
-    def _save_as_torchscript():
-        with warnings.catch_warnings():
-            # warnings.filterwarnings("ignore", category=UserWarning, module="mlflow.pytorch")
-            mlflow.pytorch.log_model(
-                torch.jit.script(model),
-                name="best_model",
-                serialization_format="pickle",
-            )
-        mlflow.set_tag("model_serialization_format", "torchscript_pickle")
-
-    if example_input is None:
-        _save_as_torchscript()
-        return
-
-    try:
-        mlflow.pytorch.log_model(
-            model,
-            name="best_model",
-            serialization_format="pt2",
-            input_example=example_input,
-        )
-        mlflow.set_tag("model_serialization_format", "pt2")
-    except Exception:
-        _save_as_torchscript()

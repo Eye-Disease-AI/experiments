@@ -28,7 +28,7 @@ CONFIG_PARAMS = {
     if k.isupper() and not k.startswith("_")
 }
 from experiment.objective import create_trainer, objective
-from lib.mlflow_setup import Experiment, save_model
+from lib.mlflow_setup import Experiment
 from lib.reproducibility import RNG
 
 
@@ -124,17 +124,14 @@ def run_study(
                     run=parent_run,
                     max_epochs=best_epoch+1,
                     callbacks=[ckpt_cb],
+                    log_model=True
                 )
                 trainer.fit(best_model, datamodule=datamodule)
 
-                if ckpt_cb.best_model_path:
-                    best_model = ModelClass.load_from_checkpoint(ckpt_cb.best_model_path)
+                print("logging to run:", parent_run.info.run_id, "experiment:", parent_run.info.experiment_id)
                 retrain_metric = ckpt_cb.best_model_score
                 if retrain_metric is not None:
                     mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
-
-            example_input, *_ = next(iter(datamodule.val_dataloader()))
-            save_model(best_model, example_input=example_input[:1])
 
         try:
             fig = plot_optimization_history(study)
