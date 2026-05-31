@@ -2,8 +2,6 @@ from dataset.hard_policy import HardPolicy
 from experiment.common_config import EXPERIMENT_NAME, SEED
 from experiment.data import MyDataModule
 from experiment.models.convnext import ConvNext
-from experiment.models.swin import Swin
-from experiment.models.vit import ViT
 from experiment.run_study import run_study
 from lib.mlflow_setup import Experiment
 from lib.reproducibility import RNG, get_git_sha

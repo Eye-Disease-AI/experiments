@@ -1,11 +1,9 @@
 import os
-import warnings
 from urllib.parse import quote_plus
 
 import mlflow
 import optuna
 import psycopg2
-import torch
 from dotenv import load_dotenv
 from optuna.storages import RDBStorage
 

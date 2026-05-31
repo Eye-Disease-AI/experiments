@@ -17,7 +17,7 @@ from torchmetrics.classification import (
     MulticlassRecall,
 )
 
-from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR, USE_SCHEDULER, CLASS_WEIGHTS
+from experiment.common_config import BACKBONE_LR_FACTOR, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR, USE_SCHEDULER, CLASS_WEIGHTS
 
 
 class ModelBase(L.LightningModule):

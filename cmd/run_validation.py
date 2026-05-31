@@ -5,10 +5,8 @@ import pkgutil
 import mlflow
 import experiment.common_config
 import experiment.models
-import lightning as L
 import numpy as np
 import optuna
-import torch
 
 from dataset.hard_policy import HardPolicy
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
@@ -21,7 +19,6 @@ from experiment.objective import create_trainer
 from experiment.run_study import CONFIG_PARAMS
 from lib.mlflow_setup import Experiment
 from lib.reproducibility import RNG, get_git_sha
-from optuna.exceptions import OptunaError
 import sys
 
 for _, _name, _ in pkgutil.iter_modules(experiment.models.__path__):
