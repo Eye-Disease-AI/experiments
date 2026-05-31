@@ -9,13 +9,10 @@ import experiment.models
 import numpy as np
 import optuna
 
-from lib.reproducibility import get_git_sha
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
 from experiment.best_snapshot import BestSnapshotCallback
 from experiment import common_config
-from experiment.models import *
 from experiment.data import MyDataModule, SubsetTransformer
-from experiment.models.base import ModelBase
 from experiment.objective import create_trainer
 from experiment.run_study import CONFIG_PARAMS
 from lib.mlflow_setup import Experiment
@@ -26,7 +23,7 @@ def parse_logged(v):
         return ast.literal_eval(v)
     except (ValueError, SyntaxError):
         return v
-    
+
 def coerce_config(current, v):
     """
     mlflow saves all parameters as strings.
@@ -47,7 +44,7 @@ def coerce_config(current, v):
         mod, _, name = m.group(1).rpartition(".")
         return getattr(importlib.import_module(mod), name)
     else:
-        raise Exception(f"coerce_config: Unsupported type")
+        raise Exception("coerce_config: Unsupported type")
 
 
 def train_and_validate(ModelClass, dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset, best_params, run):
@@ -79,9 +76,8 @@ def summarize(results, name):
 def main():
     for _, _name, _ in pkgutil.iter_modules(experiment.models.__path__):
         importlib.import_module(f"experiment.models.{_name}")
-    MODEL_CLASSES = {cls.__name__: cls for cls in ModelBase.__subclasses__()}
     SHA = get_git_sha()
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("study_to_verify", type=str)
     parser.add_argument("--mode", type=str, choices=["kfold", "seeds"], default="kfold")
@@ -129,9 +125,9 @@ def main():
         rng, batch_size=best_params["batch_size"], hard_policy=HardPolicy[hard_policy]
     )
     datamodule.setup(stage="fit")
-        
+
     results = []
-    with mlflow.start_run(run_name=validation_study_name) as parent_run:
+    with mlflow.start_run(run_name=validation_study_name):
         mlflow.set_tag("study_name", args.study_to_verify)
         mlflow.set_tag("model_class", ModelClass.__name__)
         mlflow.set_tag("mode", args.mode)
@@ -202,6 +198,6 @@ def main():
             summarize(results, "seeds")
         else:
             raise ValueError(f"unknown MODE: {args.mode}")
-        
+
 if __name__ == "__main__":
     main()
