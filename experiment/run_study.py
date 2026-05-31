@@ -80,7 +80,7 @@ def run_study(
     try:
         best_trial = study.best_trial
         mlflow.log_params(best_trial.params)
-        mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value)  # pyright: ignore
+        mlflow.log_metric(f"best_{common_config.OPTUNA_METRIC}", best_trial.value)  # pyright: ignore
         mlflow.set_tag("best_trial_number", best_trial.number)
         agg = min if common_config.OPTUNA_DIRECTION == "min" else max
         best_epoch = agg( # pyright: ignore
