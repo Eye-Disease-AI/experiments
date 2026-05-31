@@ -1,11 +1,7 @@
-import tempfile
-
-import lightning as L
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
 from experiment.data import MyDataModule
-from lightning.pytorch.callbacks import ModelCheckpoint
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
@@ -15,8 +11,6 @@ from optuna.visualization.matplotlib import (
 
 from experiment import common_config
 from experiment.common_config import (
-    BACKBONE_UNFREEZE_PATIENCE,
-    GPU_PRECISION,
     MAX_TRIALS,
     OPTUNA_DIRECTION,
     OPTUNA_METRIC,
@@ -97,9 +91,9 @@ def run_study(
         mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value)  # pyright: ignore
         mlflow.set_tag("best_trial_number", best_trial.number)
         agg = min if OPTUNA_DIRECTION == "min" else max
-        best_epoch = agg(
-            best_trial.intermediate_values, key=best_trial.intermediate_values.get
-        )  # pyright: ignore
+        best_epoch = agg(  # pyright: ignore
+            best_trial.intermediate_values, key=best_trial.intermediate_values.get # pyright: ignore
+        )
         mlflow.log_metric("best_epoch", best_epoch)
 
         best_params = study.best_params
@@ -113,25 +107,18 @@ def run_study(
         )  # pyright: ignore
 
         if retrain:
-            with tempfile.TemporaryDirectory() as ckpt_dir:
-                ckpt_cb = ModelCheckpoint(
-                    dirpath=ckpt_dir,
-                    monitor=OPTUNA_METRIC,
-                    mode=OPTUNA_DIRECTION,
-                    save_top_k=1,
-                )
-                trainer = create_trainer(
-                    run=parent_run,
-                    max_epochs=best_epoch+1,
-                    callbacks=[ckpt_cb],
-                    log_model=True
-                )
-                trainer.fit(best_model, datamodule=datamodule)
-
-                print("logging to run:", parent_run.info.run_id, "experiment:", parent_run.info.experiment_id)
-                retrain_metric = ckpt_cb.best_model_score
-                if retrain_metric is not None:
-                    mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
+            best_model_path = f"checkpoints/{study_name}/best.ckpt"
+            trainer = create_trainer(
+                run=parent_run,
+                max_epochs=best_epoch+1,
+                callbacks=[]
+            )
+            trainer.fit(best_model, datamodule=datamodule)
+            trainer.save_checkpoint(best_model_path)
+            out = trainer.validate(best_model, datamodule=datamodule)
+            retrain_metric = out[0][OPTUNA_METRIC]
+            mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric)
+            mlflow.log_artifact(best_model_path, artifact_path="model")
 
         try:
             fig = plot_optimization_history(study)

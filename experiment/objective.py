@@ -27,9 +27,9 @@ from lib.reproducibility import RNG
 
 stop_logs()
 
-def create_trainer(run, optuna_callback=None, log_model=False, **kwargs):
+def create_trainer(run, optuna_callback=None, **kwargs):
     mlf_logger = MLFlowLogger(
-        run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri(), log_model=log_model
+        run_id=run.info.run_id, tracking_uri=mlflow.get_tracking_uri()
     )
     callbacks: list[Callback] = list(kwargs.pop("callbacks", []))
 
@@ -55,7 +55,7 @@ def create_trainer(run, optuna_callback=None, log_model=False, **kwargs):
         callbacks=callbacks,
         enable_progress_bar=True,
         enable_model_summary=False,
-        enable_checkpointing=log_model, # checkpointing required if logging models
+        enable_checkpointing=False, # checkpointing required if logging models
         log_every_n_steps=1,
         precision=GPU_PRECISION,
         deterministic=True,
