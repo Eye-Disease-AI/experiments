@@ -74,7 +74,6 @@ if config_changed:
 for k, v in logged_config.items():
     if not hasattr(common_config, k):
         continue
-    print(k)
     setattr(common_config, k, coerce_config(getattr(common_config, k), v))
 ModelClass = getattr(experiment.models, study.user_attrs["model_class"])
 
