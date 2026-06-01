@@ -16,8 +16,6 @@ class BestSnapshotCallback(L.Callback):
         if trainer.sanity_checking:
             return
         v = trainer.callback_metrics.get(common_config.OPTUNA_METRIC)
-        if v is None:
-            return
         v = v.item()
         improved = (
             self._best_target is None
@@ -31,14 +29,10 @@ class BestSnapshotCallback(L.Callback):
         for k, val in trainer.callback_metrics.items():
             if not k.startswith("val_"):
                 continue
-            if not hasattr(val, "item"):
-                continue
             snap[k] = val.item()
         self.best_metrics = snap
 
     def on_fit_end(self, trainer, pl_module):
-        if not self.best_metrics:
-            return
         mlflow.log_metrics(
             {f"{self.prefix}{k}": v for k, v in self.best_metrics.items()}
         )
