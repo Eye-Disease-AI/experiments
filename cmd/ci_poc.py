@@ -23,6 +23,8 @@ def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
                 sample[k[len("best_"):]] = v
         if sample:
             result.append(sample)
+        else:
+            print(f"WARNING: Run {r.info.run_id} is empty!")
     return result
 
 
