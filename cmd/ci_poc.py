@@ -28,23 +28,29 @@ def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     return result
 
 
-def bootstrap_ci(values: list[float], n_bootstrap=10_000, ci=0.95) -> dict:
+def calculate_ci(values: list[float], do_bootstrap_simulation=False, n_bootstrap=10_000, ci=0.95) -> dict:
     arr = np.array(values)
     mean = np.mean(arr)
     alpha = (1 - ci) / 2
     standard_error = stats.sem(arr)
 
     # bootstrap simulation,
-    if len(values) < n_bootstrap:
-        rng = np.random.default_rng(0)
-        bstrap_vals = [
-            np.mean(rng.choice(arr, size=len(arr), replace=True))
-            for _ in range(n_bootstrap)
-        ]
-    else:
-        bstrap_vals = arr
-    bstrap_ci_low = np.percentile(bstrap_vals, alpha * 100)
-    bstrap_ci_high = np.percentile(bstrap_vals, (1 - alpha) * 100)
+    # It randomly draws the values of metrics with return 
+    # (like how we would do with the DATA SAMPLES in a bootstrapping study)
+    # and simulates multiple validation runs that way to estimate the distribution.
+    # Not really a scientifically backed up solution, just felt like it could
+    # give some interesting results
+    if do_bootstrap_simulation:
+        if len(values) < n_bootstrap:
+            rng = np.random.default_rng(0)
+            bstrap_vals = [
+                np.mean(rng.choice(arr, size=len(arr), replace=True))
+                for _ in range(n_bootstrap)
+            ]
+        else:
+            bstrap_vals = arr
+        bstrap_ci_low = np.percentile(bstrap_vals, alpha * 100)
+        bstrap_ci_high = np.percentile(bstrap_vals, (1 - alpha) * 100)
 
     # t-student
 
@@ -53,8 +59,7 @@ def bootstrap_ci(values: list[float], n_bootstrap=10_000, ci=0.95) -> dict:
     )
     # z-score
     z_st_ci_low, z_st_ci_high = stats.norm.interval(ci, loc=mean, scale=standard_error)
-
-    return {
+    out = {
         "mean": np.mean(arr),
         "median": np.median(arr),
         "std": np.std(arr),
@@ -62,11 +67,33 @@ def bootstrap_ci(values: list[float], n_bootstrap=10_000, ci=0.95) -> dict:
         "t_st_ci_high": t_st_ci_high,
         "z_st_ci_low": z_st_ci_low,
         "z_st_ci_high": z_st_ci_high,
-        "bstrap_ci_low": bstrap_ci_low,
-        "bstrap_ci_high": bstrap_ci_high,
-        "n": len(arr),
     }
+    if do_bootstrap_simulation:
+        out |= {
+            "bstrap_ci_low": bstrap_ci_low,
+            "bstrap_ci_high": bstrap_ci_high,
+        }
+    out |= {"n": len(arr)}
+    return out
 
+def print_ci(vals, do_bootstrap_simulation=False):
+    ci = calculate_ci(vals, do_bootstrap_simulation)
+    marker = " (The optimized metric)" if metric_name == common_config.OPTUNA_METRIC else ""
+    rows = [
+        ("Values:", f"{[f'{x:.4f}' for x in vals[:10]]}..."),
+        ("Trials:", f"{ci['n']}"),
+        ("Mean:", f"{ci['mean']:.4f}"),
+        ("Median:", f"{ci['median']:.4f}"),
+        ("Std:", f"{ci['std']:.4f}"),
+        ("Z-score 95% CI:", f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]"),
+        ("T-student 95% CI:", f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]"),
+    ]
+    if do_bootstrap_simulation:
+        rows.append(("Bootstrap 95% CI:", f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]"))
+    print(f"\n--- {metric_name}{marker} ---")
+    w = max(len(r[0]) for r in rows)
+    for label, value in rows:
+        print(f"{label:{w}}  {value}")
 
 if __name__ == "__main__":
     STUDY_NAME = f"{common_config.EXPERIMENT_NAME}/lr-search5"
@@ -83,21 +110,6 @@ if __name__ == "__main__":
         all_metric_names = sorted({k for m in trial_metrics for k in m})
         for metric_name in all_metric_names:
             vals = [m[metric_name] for m in trial_metrics if metric_name in m]
-            if not vals:
-                continue
-            ci = bootstrap_ci(vals)
-            marker = " (The optimized metric)" if metric_name == common_config.OPTUNA_METRIC else ""
-            rows = [
-                ("Values:", f"{[f'{x:.4f}' for x in vals[:10]]}..."),
-                ("Trials:", f"{ci['n']}"),
-                ("Mean:", f"{ci['mean']:.4f}"),
-                ("Median:", f"{ci['median']:.4f}"),
-                ("Std:", f"{ci['std']:.4f}"),
-                ("Bootstrap 95% CI:", f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]"),
-                ("Z-score 95% CI:", f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]"),
-                ("T-student 95% CI:", f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]"),
-            ]
-            print(f"\n--- {metric_name}{marker} ---")
-            w = max(len(r[0]) for r in rows)
-            for label, value in rows:
-                print(f"{label:{w}}  {value}")
+            print_ci(vals)
+
+
