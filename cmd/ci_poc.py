@@ -17,8 +17,6 @@ def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     print(f"Found {len(runs)} validation-sample runs for study '{study_name}'.")
     result = []
     for r in runs:
-        if r.data.tags.get("pruned") == "true":
-            continue
         sample = {}
         for k, v in r.data.metrics.items():
             if k.startswith("best_val_"):
