@@ -9,13 +9,15 @@ from optuna.visualization.matplotlib import (
     plot_param_importances,
 )
 from experiment import common_config
+from experiment.objective import create_trainer, objective
+from lib.mlflow_setup import Experiment
+from lib.reproducibility import RNG
+
+
 CONFIG_PARAMS = {
     k: str(v) for k, v in vars(common_config).items()
     if k.isupper() and not k.startswith("_")
 }
-from experiment.objective import create_trainer, objective
-from lib.mlflow_setup import Experiment
-from lib.reproducibility import RNG
 
 
 def run_study(
