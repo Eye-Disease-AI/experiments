@@ -26,6 +26,11 @@ def parse_logged(v):
 
 def coerce_config(current, v):
     """
+    current: The config value which we'd like to override,
+        in common_config
+    v: a string value of the config saved to mlflow which
+        we'd like to convert into the original type
+
     mlflow saves all parameters as strings.
     Need to parse them to their original types
     """
