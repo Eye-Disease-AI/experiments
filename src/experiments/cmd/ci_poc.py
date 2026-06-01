@@ -3,9 +3,8 @@ import sys
 import mlflow
 import numpy as np
 from scipy import stats
-import sys
-from lib.mlflow_setup import Experiment
-from experiment import common_config
+from experiments.lib.mlflow_setup import Experiment
+from experiments.experiment import common_config
 
 def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     mlflow_exp = exp.client.get_experiment_by_name(exp.experiment_name)

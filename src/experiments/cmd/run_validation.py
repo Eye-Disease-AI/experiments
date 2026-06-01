@@ -5,7 +5,6 @@ import pkgutil
 import re
 from dataset.hard_policy import HardPolicy
 import mlflow
-import experiments.experiment.models
 import numpy as np
 import optuna
 
@@ -17,6 +16,7 @@ from experiments.experiment.objective import create_trainer
 from experiments.experiment.run_study import CONFIG_PARAMS
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.reproducibility import RNG, get_git_sha
+import experiments.experiment.models
 
 def parse_logged(v):
     try:
@@ -101,7 +101,7 @@ def load_study_hparams(study):
             continue
         setattr(common_config, k, coerce_config(getattr(common_config, k), v))
 
-    ModelClass = getattr(experiment.models, study.user_attrs["model_class"])
+    ModelClass = getattr(experiments.experiment.models, study.user_attrs["model_class"])
     best_params = study.best_params
     _agg = min if common_config.OPTUNA_DIRECTION == "min" else max
     best_epoch = _agg(
@@ -157,7 +157,7 @@ def run_seeds_validation(ModelClass, dm, best_params, hard_policy, rng, validati
     return results
 
 def main():
-    for _, _name, _ in pkgutil.iter_modules(experiment.models.__path__):
+    for _, _name, _ in pkgutil.iter_modules(experiments.experiment.models.__path__):
         importlib.import_module(f"experiment.models.{_name}")
     SHA = get_git_sha()
 

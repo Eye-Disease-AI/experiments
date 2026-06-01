@@ -18,7 +18,7 @@ class Swin(ModelBase):
         self.save_hyperparameters()
         self.model = torchvision.models.swin_b(weights="IMAGENET1K_V1")
         in_features = self.model.head.in_features  # 1024
-        self.model.head = nn.Sequential(
+        self.model.head = nn.Sequential( # type: ignore
             nn.Dropout(dropout),
             nn.Linear(in_features, n_classes),
         )

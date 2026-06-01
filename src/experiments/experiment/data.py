@@ -7,10 +7,8 @@ import torch
 from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
-from dataset.loader import NuclearCataractDataset, HardPolicy
 from experiments.experiment import common_config
 from experiments.lib.reproducibility import RNG
-import numpy as np
 
 data_path = "data"
 if not os.path.exists(data_path):
@@ -98,7 +96,7 @@ class MyDataModule(L.LightningDataModule):
                 )
             ),
             transformsv2.RandomHorizontalFlip(0.5),
-            transformsv2.RandomRotation(15),
+            transformsv2.RandomRotation(15), # type: ignore
             transformsv2.Resize((self.image_size, self.image_size)),
             transformsv2.ConvertImageDtype(),
         ]

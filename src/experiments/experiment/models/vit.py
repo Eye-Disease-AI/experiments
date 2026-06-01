@@ -17,10 +17,10 @@ class ViT(ModelBase):
         super().__init__(n_classes, class_weights=class_weights)
         self.save_hyperparameters()
         self.model = torchvision.models.vit_b_16(weights="IMAGENET1K_V1")
-        in_features = self.model.heads.head.in_features  # 768
+        in_features = self.model.heads.head.in_features  # type:ignore # 768
         self.model.heads = nn.Sequential(
             nn.Dropout(dropout),
-            nn.Linear(in_features, n_classes),
+            nn.Linear(in_features, n_classes), # type: ignore
         )
 
     def backbone_modules(self):
