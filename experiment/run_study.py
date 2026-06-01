@@ -1,35 +1,23 @@
-import tempfile
-
-import lightning as L
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
 from experiment.data import MyDataModule
-from lightning.pytorch.callbacks import ModelCheckpoint
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
     plot_optimization_history,
     plot_param_importances,
 )
-
 from experiment import common_config
-from experiment.common_config import (
-    BACKBONE_UNFREEZE_PATIENCE,
-    GPU_PRECISION,
-    MAX_TRIALS,
-    OPTUNA_DIRECTION,
-    OPTUNA_METRIC,
-    SEED,
-)
+from experiment.objective import create_trainer, objective
+from lib.mlflow_setup import Experiment
+from lib.reproducibility import RNG
+
 
 CONFIG_PARAMS = {
     k: str(v) for k, v in vars(common_config).items()
     if k.isupper() and not k.startswith("_")
 }
-from experiment.objective import create_trainer, objective
-from lib.mlflow_setup import Experiment, save_model
-from lib.reproducibility import RNG
 
 
 def run_study(
@@ -42,7 +30,7 @@ def run_study(
 ):
     study = optuna.create_study(
         study_name=study_name,
-        direction={"min": "minimize", "max": "maximize"}[OPTUNA_DIRECTION],
+        direction={"min": "minimize", "max": "maximize"}[common_config.OPTUNA_DIRECTION],
         storage=exp.storage,
         load_if_exists=True,
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
@@ -55,7 +43,7 @@ def run_study(
     n_finished = sum(
         1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
     )
-    print(f"Study '{study_name}': {n_finished}/{MAX_TRIALS} finished trials.")
+    print(f"Study '{study_name}': {n_finished}/{common_config.MAX_TRIALS} finished trials.")
 
     parent_run_id = study.user_attrs.get("mlflow_parent_run_id")
     if parent_run_id:
@@ -68,19 +56,19 @@ def run_study(
         mlflow.log_params(CONFIG_PARAMS)
         mlflow.log_param("hard_policy", datamodule.hard_policy.name)
 
-    if n_finished >= MAX_TRIALS:
+    if n_finished >= common_config.MAX_TRIALS:
         print(
-            f"Study already complete. Best: {study.best_params}, {OPTUNA_METRIC}: {study.best_value:.4f}"
+            f"Study already complete. Best: {study.best_params}, {common_config.OPTUNA_METRIC}: {study.best_value:.4f}"
         )
         mlflow.end_run()
         return
 
     study.optimize(
         lambda trial: objective(datamodule, rng, exp, trial, ModelClass),  # pyright: ignore
-        n_trials=MAX_TRIALS * 2,
+        n_trials=common_config.MAX_TRIALS * 2,
         callbacks=[
             MaxTrialsCallback(
-                MAX_TRIALS, states=(TrialState.COMPLETE, TrialState.PRUNED)
+                common_config.MAX_TRIALS, states=(TrialState.COMPLETE, TrialState.PRUNED)
             )
         ],
     )
@@ -94,16 +82,16 @@ def run_study(
     try:
         best_trial = study.best_trial
         mlflow.log_params(best_trial.params)
-        mlflow.log_metric(f"best_{OPTUNA_METRIC}", best_trial.value)  # pyright: ignore
+        mlflow.log_metric(f"best_{common_config.OPTUNA_METRIC}", best_trial.value)  # pyright: ignore
         mlflow.set_tag("best_trial_number", best_trial.number)
-        agg = min if OPTUNA_DIRECTION == "min" else max
-        best_epoch = agg(
-            best_trial.intermediate_values, key=best_trial.intermediate_values.get
-        )  # pyright: ignore
+        agg = min if common_config.OPTUNA_DIRECTION == "min" else max
+        best_epoch = agg( # pyright: ignore
+            best_trial.intermediate_values, key=best_trial.intermediate_values.get # pyright: ignore
+        )
         mlflow.log_metric("best_epoch", best_epoch)
 
         best_params = study.best_params
-        rng.set_seed(SEED)
+        rng.set_seed(common_config.SEED)
         datamodule.batch_size = best_params["batch_size"]  # pyright: ignore
         datamodule.setup(stage="fit")
         model_params = {k: v for k, v in best_params.items() if k != "batch_size"}
@@ -113,28 +101,20 @@ def run_study(
         )  # pyright: ignore
 
         if retrain:
-            with tempfile.TemporaryDirectory() as ckpt_dir:
-                ckpt_cb = ModelCheckpoint(
-                    dirpath=ckpt_dir,
-                    monitor=OPTUNA_METRIC,
-                    mode=OPTUNA_DIRECTION,
-                    save_top_k=1,
-                )
-                trainer = create_trainer(
-                    run=parent_run,
-                    max_epochs=best_epoch+1,
-                    callbacks=[ckpt_cb],
-                )
-                trainer.fit(best_model, datamodule=datamodule)
-
-                if ckpt_cb.best_model_path:
-                    best_model = ModelClass.load_from_checkpoint(ckpt_cb.best_model_path)
-                retrain_metric = ckpt_cb.best_model_score
-                if retrain_metric is not None:
-                    mlflow.log_metric(f"retrain_{OPTUNA_METRIC}", retrain_metric.item())
-
-            example_input, *_ = next(iter(datamodule.val_dataloader()))
-            save_model(best_model, example_input=example_input[:1])
+            best_model_path = f"checkpoints/{study_name}/best.ckpt"
+            trainer = create_trainer(
+                run=parent_run,
+                # We train for best_epoch+1, because best_epoch is 0-indexed.
+                # e.g. if we want to train up to epoch 2, we need to train for 3 epochs (0, 1, 2).
+                max_epochs=best_epoch+1,
+                callbacks=[]
+            )
+            trainer.fit(best_model, datamodule=datamodule)
+            trainer.save_checkpoint(best_model_path)
+            out = trainer.validate(best_model, datamodule=datamodule)
+            retrain_metric = out[0][common_config.OPTUNA_METRIC]
+            mlflow.log_metric(f"retrain_{common_config.OPTUNA_METRIC}", retrain_metric)
+            mlflow.log_artifact(best_model_path, artifact_path="model")
 
         try:
             fig = plot_optimization_history(study)

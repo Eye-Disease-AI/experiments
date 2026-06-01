@@ -17,13 +17,14 @@ from torchmetrics.classification import (
     MulticlassRecall,
 )
 
-from experiment.common_config import BACKBONE_LR_FACTOR, EPOCHS, OPTIMIZER, SCHEDULER_MAX_T, SCHEDULER_MIN_LR, USE_SCHEDULER, CLASS_WEIGHTS
+
+from experiment import common_config
 
 
 class ModelBase(L.LightningModule):
     def __init__(self, n_classes: int, class_weights: torch.Tensor | None = None):
         super().__init__()
-        if CLASS_WEIGHTS:
+        if common_config.CLASS_WEIGHTS:
             self.class_weights = class_weights
         else:
             self.class_weights = None
@@ -114,20 +115,20 @@ class ModelBase(L.LightningModule):
         backbone_ids = {id(p) for m in self.backbone_modules() for p in m.parameters()}
         backbone_params = [p for p in self.parameters() if id(p) in backbone_ids]
         head_params = [p for p in self.parameters() if id(p) not in backbone_ids]
-        optimizer = OPTIMIZER(
+        optimizer = common_config.OPTIMIZER(
             [
                 {"params": head_params, "lr": self.hparams.lr},  # pyright: ignore
-                {"params": backbone_params, "lr": self.hparams.lr * BACKBONE_LR_FACTOR},  # pyright: ignore
+                {"params": backbone_params, "lr": self.hparams.lr * common_config.BACKBONE_LR_FACTOR},  # pyright: ignore
             ],
             weight_decay=self.hparams.weight_decay,
             amsgrad=True,
         )  # pyright: ignore
 
-        if USE_SCHEDULER:
+        if common_config.USE_SCHEDULER:
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer,
-                eta_min=SCHEDULER_MIN_LR,
-                T_max=SCHEDULER_MAX_T,
+                eta_min=common_config.SCHEDULER_MIN_LR,
+                T_max=common_config.SCHEDULER_MAX_T,
             )
             return ([optimizer], [scheduler])
         
