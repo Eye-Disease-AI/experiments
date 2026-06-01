@@ -8,7 +8,7 @@ from optuna.visualization.matplotlib import (
     plot_optimization_history,
     plot_param_importances,
 )
-from experiment import common_config 
+from experiment import common_config
 CONFIG_PARAMS = {
     k: str(v) for k, v in vars(common_config).items()
     if k.isupper() and not k.startswith("_")
@@ -102,6 +102,8 @@ def run_study(
             best_model_path = f"checkpoints/{study_name}/best.ckpt"
             trainer = create_trainer(
                 run=parent_run,
+                # We train for best_epoch+1, because best_epoch is 0-indexed.
+                # e.g. if we want to train up to epoch 2, we need to train for 3 epochs (0, 1, 2).
                 max_epochs=best_epoch+1,
                 callbacks=[]
             )
