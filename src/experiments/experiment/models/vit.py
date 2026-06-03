@@ -20,7 +20,7 @@ class ViT(ModelBase):
         in_features = self.model.heads.head.in_features  # type:ignore # 768
         self.model.heads = nn.Sequential(
             nn.Dropout(dropout),
-            nn.Linear(in_features, n_classes), # type: ignore
+            nn.Linear(in_features, n_classes),  # type: ignore
         )
 
     def backbone_modules(self):

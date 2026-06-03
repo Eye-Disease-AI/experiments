@@ -6,6 +6,7 @@ from scipy import stats
 from experiments.lib.mlflow_setup import Experiment
 from experiments.experiment import common_config
 
+
 def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     mlflow_exp = exp.client.get_experiment_by_name(exp.experiment_name)
     runs = exp.client.search_runs(
@@ -28,7 +29,9 @@ def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     return result
 
 
-def calculate_ci(values: list[float], do_bootstrap_simulation=False, n_bootstrap=10_000, ci=0.95) -> dict:
+def calculate_ci(
+    values: list[float], do_bootstrap_simulation=False, n_bootstrap=10_000, ci=0.95
+) -> dict:
     arr = np.array(values)
     mean = np.mean(arr)
     alpha = (1 - ci) / 2
@@ -76,9 +79,12 @@ def calculate_ci(values: list[float], do_bootstrap_simulation=False, n_bootstrap
     out |= {"n": len(arr)}
     return out
 
+
 def print_ci(vals, do_bootstrap_simulation=False):
     ci = calculate_ci(vals, do_bootstrap_simulation)
-    marker = " (The optimized metric)" if metric_name == common_config.OPTUNA_METRIC else ""
+    marker = (
+        " (The optimized metric)" if metric_name == common_config.OPTUNA_METRIC else ""
+    )
     rows = [
         ("Values:", f"{[f'{x:.4f}' for x in vals[:10]]}..."),
         ("Trials:", f"{ci['n']}"),
@@ -89,16 +95,22 @@ def print_ci(vals, do_bootstrap_simulation=False):
         ("T-student 95% CI:", f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]"),
     ]
     if do_bootstrap_simulation:
-        rows.append(("Bootstrap 95% CI:", f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]"))
+        rows.append(
+            (
+                "Bootstrap 95% CI:",
+                f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]",
+            )
+        )
     print(f"\n--- {metric_name}{marker} ---")
     w = max(len(r[0]) for r in rows)
     for label, value in rows:
         print(f"{label:{w}}  {value}")
 
+
 if __name__ == "__main__":
     STUDY_NAME = f"{common_config.EXPERIMENT_NAME}/lr-search5"
     if len(sys.argv) > 1:
-        STUDY_NAME=sys.argv[1]
+        STUDY_NAME = sys.argv[1]
     exp = Experiment(common_config.EXPERIMENT_NAME)
     mlflow.set_tracking_uri("http://localhost:5000")
     trial_metrics = get_trial_vals(exp, STUDY_NAME)

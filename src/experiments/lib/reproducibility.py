@@ -1,6 +1,7 @@
 import subprocess
 import lightning as L
 
+
 class RNG:
     def __init__(self):
         pass
@@ -15,6 +16,7 @@ class RNG:
     def disable_determinism(self):
         self.seed = None
         L.seed_everything(None)
+
 
 def get_git_sha() -> str:
     sha = subprocess.check_output(

@@ -16,7 +16,7 @@ class BestSnapshotCallback(L.Callback):
         if trainer.sanity_checking:
             return
         v = trainer.callback_metrics.get(common_config.OPTUNA_METRIC)
-        v = v.item() # type: ignore
+        v = v.item()  # type: ignore
         improved = (
             self._best_target is None
             or self._agg(v, self._best_target) != self._best_target
