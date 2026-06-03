@@ -1,17 +1,17 @@
+import sys
+
 import mlflow
 import numpy as np
 from scipy import stats
-import sys
-from lib.mlflow_setup import Experiment
-from experiment import common_config
+from experiments.lib.mlflow_setup import Experiment
+from experiments.experiment import common_config
 
 def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
     mlflow_exp = exp.client.get_experiment_by_name(exp.experiment_name)
     runs = exp.client.search_runs(
         experiment_ids=[mlflow_exp.experiment_id],  # pyright: ignore
         filter_string=(
-            f"tags.optuna_study = '{study_name}' "
-            f"and tags.validation_sample = 'true'"
+            f"tags.optuna_study = '{study_name}' and tags.validation_sample = 'true'"
         ),
     )
     print(f"Found {len(runs)} validation-sample runs for study '{study_name}'.")
@@ -20,7 +20,7 @@ def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
         sample = {}
         for k, v in r.data.metrics.items():
             if k.startswith("best_val_"):
-                sample[k[len("best_"):]] = v
+                sample[k[len("best_") :]] = v
         if sample:
             result.append(sample)
         else:
@@ -35,7 +35,7 @@ def calculate_ci(values: list[float], do_bootstrap_simulation=False, n_bootstrap
     standard_error = stats.sem(arr)
 
     # bootstrap simulation,
-    # It randomly draws the values of metrics with return 
+    # It randomly draws the values of metrics with return
     # (like how we would do with the DATA SAMPLES in a bootstrapping study)
     # and simulates multiple validation runs that way to estimate the distribution.
     # Not really a scientifically backed up solution, just felt like it could
@@ -111,5 +111,3 @@ if __name__ == "__main__":
         for metric_name in all_metric_names:
             vals = [m[metric_name] for m in trial_metrics if metric_name in m]
             print_ci(vals)
-
-

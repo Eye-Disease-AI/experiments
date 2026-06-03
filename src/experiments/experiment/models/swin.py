@@ -5,7 +5,7 @@ import torchvision
 from .base import ModelBase
 
 
-class ViT(ModelBase):
+class Swin(ModelBase):
     def __init__(
         self,
         n_classes: int,
@@ -16,15 +16,15 @@ class ViT(ModelBase):
     ):
         super().__init__(n_classes, class_weights=class_weights)
         self.save_hyperparameters()
-        self.model = torchvision.models.vit_b_16(weights="IMAGENET1K_V1")
-        in_features = self.model.heads.head.in_features  # 768
-        self.model.heads = nn.Sequential(
+        self.model = torchvision.models.swin_b(weights="IMAGENET1K_V1")
+        in_features = self.model.head.in_features  # 1024
+        self.model.head = nn.Sequential( # type: ignore
             nn.Dropout(dropout),
             nn.Linear(in_features, n_classes),
         )
 
     def backbone_modules(self):
-        return [self.model.encoder]
+        return [self.model.features, self.model.norm]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)

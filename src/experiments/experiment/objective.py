@@ -3,17 +3,19 @@ import time
 import lightning as L
 import mlflow
 import optuna
+import torch
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
-from experiment.best_snapshot import BestSnapshotCallback
-from experiment import common_config
-from lib.log_silencer import stop_logs
-from lib.mlflow_setup import Experiment
-from lib.reproducibility import RNG
+from experiments.experiment.best_snapshot import BestSnapshotCallback
+from experiments.experiment import common_config
+from experiments.lib.log_silencer import stop_logs
+from experiments.lib.mlflow_setup import Experiment
+from experiments.lib.reproducibility import RNG
 
 stop_logs()
+
 
 def create_trainer(run, optuna_callback=None, **kwargs):
     mlf_logger = MLFlowLogger(
@@ -50,6 +52,7 @@ def create_trainer(run, optuna_callback=None, **kwargs):
     )
     defaults.update(kwargs)
     return L.Trainer(**defaults)  # pyright: ignore
+
 
 class OptunaMLflowCallback(Callback):
     """Reports val_loss to Optuna each epoch and handles pruning + batched MLflow logging."""
@@ -157,9 +160,8 @@ class BackboneFreezeCallback(Callback):
             if isinstance(cb, EarlyStopping):
                 cb.wait_count = 0
                 torch_inf = torch.tensor(torch.inf)
-                cb.best_score = (
-                    torch_inf if cb.monitor_op == torch.lt else -torch_inf
-                )
+                cb.best_score = torch_inf if cb.monitor_op == torch.lt else -torch_inf
+
 
 def objective(
     datamodule: L.LightningDataModule,

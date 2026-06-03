@@ -1,7 +1,7 @@
 import lightning as L
 import mlflow
 
-from experiment import common_config
+from experiments.experiment import common_config
 
 
 class BestSnapshotCallback(L.Callback):
@@ -16,7 +16,7 @@ class BestSnapshotCallback(L.Callback):
         if trainer.sanity_checking:
             return
         v = trainer.callback_metrics.get(common_config.OPTUNA_METRIC)
-        v = v.item()
+        v = v.item() # type: ignore
         improved = (
             self._best_target is None
             or self._agg(v, self._best_target) != self._best_target

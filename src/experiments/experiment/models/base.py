@@ -18,7 +18,7 @@ from torchmetrics.classification import (
 )
 
 
-from experiment import common_config
+from experiments.experiment import common_config
 
 
 class ModelBase(L.LightningModule):
@@ -120,7 +120,7 @@ class ModelBase(L.LightningModule):
                 {"params": head_params, "lr": self.hparams.lr},  # pyright: ignore
                 {"params": backbone_params, "lr": self.hparams.lr * common_config.BACKBONE_LR_FACTOR},  # pyright: ignore
             ],
-            weight_decay=self.hparams.weight_decay,
+            weight_decay=self.hparams.weight_decay, # type: ignore
             amsgrad=True,
         )  # pyright: ignore
 
@@ -131,5 +131,5 @@ class ModelBase(L.LightningModule):
                 T_max=common_config.SCHEDULER_MAX_T,
             )
             return ([optimizer], [scheduler])
-        
+
         return optimizer
