@@ -27,17 +27,21 @@ def create_trainer(run, optuna_callback=None, **kwargs):
         callbacks.append(optuna_callback)
 
     if common_config.USE_EARLY_STOPPING:
-        callbacks.append(EarlyStopping(
-            monitor=common_config.OPTUNA_METRIC,
-            patience=common_config.EARLY_STOPPING_PATIENCE,
-            mode=common_config.OPTUNA_DIRECTION,
-        ))
+        callbacks.append(
+            EarlyStopping(
+                monitor=common_config.OPTUNA_METRIC,
+                patience=common_config.EARLY_STOPPING_PATIENCE,
+                mode=common_config.OPTUNA_DIRECTION,
+            )
+        )
     if common_config.USE_FREEZING:
-        callbacks.append(BackboneFreezeCallback(
-            monitor=common_config.OPTUNA_METRIC,
-            patience=common_config.BACKBONE_UNFREEZE_PATIENCE,
-            mode=common_config.OPTUNA_DIRECTION,
-        ))
+        callbacks.append(
+            BackboneFreezeCallback(
+                monitor=common_config.OPTUNA_METRIC,
+                patience=common_config.BACKBONE_UNFREEZE_PATIENCE,
+                mode=common_config.OPTUNA_DIRECTION,
+            )
+        )
     defaults = dict(
         max_epochs=common_config.EPOCHS,
         accelerator="auto",
@@ -45,7 +49,7 @@ def create_trainer(run, optuna_callback=None, **kwargs):
         callbacks=callbacks,
         enable_progress_bar=True,
         enable_model_summary=False,
-        enable_checkpointing=False, # checkpointing required if logging models
+        enable_checkpointing=False,  # checkpointing required if logging models
         log_every_n_steps=1,
         precision=common_config.GPU_PRECISION,
         deterministic=True,
@@ -133,7 +137,7 @@ class BackboneFreezeCallback(Callback):
             return
         v = val.item()
         if common_config.BACKBONE_UNFREEZE_PATIENCE <= 0:
-            if self._wait  == common_config.BACKBONE_UNFREEZE_EPOCHS:
+            if self._wait == common_config.BACKBONE_UNFREEZE_EPOCHS:
                 self.unfreeze(trainer, pl_module)
             self._wait += 1
         else:

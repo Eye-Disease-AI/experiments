@@ -18,11 +18,13 @@ from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.reproducibility import RNG, get_git_sha
 import experiments.experiment.models
 
+
 def parse_logged(v):
     try:
         return ast.literal_eval(v)
-    except (ValueError, SyntaxError):
+    except ValueError, SyntaxError:
         return v
+
 
 def coerce_config(current, v):
     """
@@ -51,13 +53,19 @@ def coerce_config(current, v):
     else:
         raise Exception("coerce_config: Unsupported type")
 
-def datamodule_change_subsets(dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset):
+
+def datamodule_change_subsets(
+    dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset
+):
     dm.train_set = SubsetTransformer(train_sub, transform=dm.transform)
     dm.val_set = SubsetTransformer(val_sub, transform=dm.val_transform)
     dm.train_class_weights = train_sub.class_weights()
     return dm
 
-def train_and_validate(ModelClass, dm: MyDataModule, best_params, run, snapshot_prefix=None):
+
+def train_and_validate(
+    ModelClass, dm: MyDataModule, best_params, run, snapshot_prefix=None
+):
     params = {k: v for k, v in best_params.items() if k != "batch_size"}
     model = ModelClass(
         dm.dataset.n_classes, **params, class_weights=dm.train_class_weights
@@ -67,7 +75,10 @@ def train_and_validate(ModelClass, dm: MyDataModule, best_params, run, snapshot_
     else:
         best_cb = BestSnapshotCallback()
     trainer = create_trainer(
-        run, max_epochs=common_config.EPOCHS, precision=common_config.GPU_PRECISION, callbacks=[best_cb]
+        run,
+        max_epochs=common_config.EPOCHS,
+        precision=common_config.GPU_PRECISION,
+        callbacks=[best_cb],
     )
     trainer.fit(model, datamodule=dm)
     return best_cb.best_metrics
@@ -82,8 +93,9 @@ def summarize(results, name):
             f"min={vals.min():.4f}  max={vals.max():.4f}"
         )
 
+
 def load_study_hparams(study):
-# Loading configs
+    # Loading configs
     logged_config = study.user_attrs.get("config") or {}
     config_changed = {
         k: (logged_config.get(k), CONFIG_PARAMS.get(k))
@@ -108,11 +120,16 @@ def load_study_hparams(study):
         study.best_trial.intermediate_values,
         key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
     )  # type: ignore
-    hard_policy: str = str(study.user_attrs.get('hard_policy'))
-    print(f"best_params={best_params} best_epoch={best_epoch} hard_policy={hard_policy}")
+    hard_policy: str = str(study.user_attrs.get("hard_policy"))
+    print(
+        f"best_params={best_params} best_epoch={best_epoch} hard_policy={hard_policy}"
+    )
     return ModelClass, best_params, best_epoch, hard_policy
 
-def run_kfold_validation(ModelClass, dm, best_params, hard_policy, rng, validation_study_name, K):
+
+def run_kfold_validation(
+    ModelClass, dm, best_params, hard_policy, rng, validation_study_name, K
+):
     results = []
     dataset = NuclearCataractDataset(
         NuclearCataractDataset.KFoldCVMode(K),
@@ -134,7 +151,9 @@ def run_kfold_validation(ModelClass, dm, best_params, hard_policy, rng, validati
     return results
 
 
-def run_seeds_validation(ModelClass, dm, best_params, hard_policy, rng, validation_study_name, num_seeds):
+def run_seeds_validation(
+    ModelClass, dm, best_params, hard_policy, rng, validation_study_name, num_seeds
+):
     results = []
     dataset = NuclearCataractDataset(
         NuclearCataractDataset.TrainValMode(0.8, 0.2),
@@ -155,6 +174,7 @@ def run_seeds_validation(ModelClass, dm, best_params, hard_policy, rng, validati
             m = train_and_validate(ModelClass, dm, best_params, child_run)
         results.append(m)
     return results
+
 
 def main():
     for _, _name, _ in pkgutil.iter_modules(experiments.experiment.models.__path__):
@@ -186,12 +206,18 @@ def main():
         mlflow.set_tag("study_name", args.study_to_verify)
         mlflow.set_tag("model_class", ModelClass.__name__)
         mlflow.set_tag("mode", args.mode)
-        mlflow.log_params({
-            **best_params,
-            "hard_policy": hard_policy,
-            "seed": common_config.SEED,
-            **({"K": args.K} if args.mode == "kfold" else {"n_seeds": args.num_seeds}),
-        })
+        mlflow.log_params(
+            {
+                **best_params,
+                "hard_policy": hard_policy,
+                "seed": common_config.SEED,
+                **(
+                    {"K": args.K}
+                    if args.mode == "kfold"
+                    else {"n_seeds": args.num_seeds}
+                ),
+            }
+        )
         mlflow.log_metric("best_epoch", best_epoch)
         best_trial_run_id = study.best_trial.user_attrs.get("mlflow_run_id")
         if best_trial_run_id:
@@ -202,15 +228,38 @@ def main():
 
         with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
             mlflow.set_tag("optuna_study", validation_study_name)
-            train_and_validate(ModelClass, datamodule, best_params, retrain_run, snapshot_prefix="retrain_")
+            train_and_validate(
+                ModelClass,
+                datamodule,
+                best_params,
+                retrain_run,
+                snapshot_prefix="retrain_",
+            )
 
         if args.mode == "kfold":
-            results = run_kfold_validation(ModelClass, datamodule, best_params, hard_policy, rng, validation_study_name, args.K)
+            results = run_kfold_validation(
+                ModelClass,
+                datamodule,
+                best_params,
+                hard_policy,
+                rng,
+                validation_study_name,
+                args.K,
+            )
         elif args.mode == "seeds":
-            results = run_seeds_validation(ModelClass, datamodule, best_params, hard_policy, rng, validation_study_name, args.num_seeds)
+            results = run_seeds_validation(
+                ModelClass,
+                datamodule,
+                best_params,
+                hard_policy,
+                rng,
+                validation_study_name,
+                args.num_seeds,
+            )
         else:
             raise ValueError(f"unknown MODE: {args.mode}")
         summarize(results, args.mode)
+
 
 if __name__ == "__main__":
     main()

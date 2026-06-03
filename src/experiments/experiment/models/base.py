@@ -118,9 +118,12 @@ class ModelBase(L.LightningModule):
         optimizer = common_config.OPTIMIZER(
             [
                 {"params": head_params, "lr": self.hparams.lr},  # pyright: ignore
-                {"params": backbone_params, "lr": self.hparams.lr * common_config.BACKBONE_LR_FACTOR},  # pyright: ignore
+                {
+                    "params": backbone_params,
+                    "lr": self.hparams.lr * common_config.BACKBONE_LR_FACTOR,
+                },  # pyright: ignore
             ],
-            weight_decay=self.hparams.weight_decay, # type: ignore
+            weight_decay=self.hparams.weight_decay,  # type: ignore
             amsgrad=True,
         )  # pyright: ignore
 

@@ -31,7 +31,9 @@ def run_study(
 ):
     study = optuna.create_study(
         study_name=study_name,
-        direction={"min": "minimize", "max": "maximize"}[common_config.OPTUNA_DIRECTION],
+        direction={"min": "minimize", "max": "maximize"}[
+            common_config.OPTUNA_DIRECTION
+        ],
         storage=exp.storage,
         load_if_exists=True,
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
@@ -44,7 +46,9 @@ def run_study(
     n_finished = sum(
         1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
     )
-    print(f"Study '{study_name}': {n_finished}/{common_config.MAX_TRIALS} finished trials.")
+    print(
+        f"Study '{study_name}': {n_finished}/{common_config.MAX_TRIALS} finished trials."
+    )
 
     parent_run_id = study.user_attrs.get("mlflow_parent_run_id")
     if parent_run_id:
@@ -69,7 +73,8 @@ def run_study(
         n_trials=common_config.MAX_TRIALS * 2,
         callbacks=[
             MaxTrialsCallback(
-                common_config.MAX_TRIALS, states=(TrialState.COMPLETE, TrialState.PRUNED)
+                common_config.MAX_TRIALS,
+                states=(TrialState.COMPLETE, TrialState.PRUNED),
             )
         ],
     )
@@ -86,8 +91,9 @@ def run_study(
         mlflow.log_metric(f"best_{common_config.OPTUNA_METRIC}", best_trial.value)  # pyright: ignore
         mlflow.set_tag("best_trial_number", best_trial.number)
         agg = min if common_config.OPTUNA_DIRECTION == "min" else max
-        best_epoch = agg( # pyright: ignore
-            best_trial.intermediate_values, key=best_trial.intermediate_values.get # pyright: ignore
+        best_epoch = agg(  # pyright: ignore
+            best_trial.intermediate_values,
+            key=best_trial.intermediate_values.get,  # pyright: ignore
         )
         mlflow.log_metric("best_epoch", best_epoch)
 
@@ -107,8 +113,8 @@ def run_study(
                 run=parent_run,
                 # We train for best_epoch+1, because best_epoch is 0-indexed.
                 # e.g. if we want to train up to epoch 2, we need to train for 3 epochs (0, 1, 2).
-                max_epochs=best_epoch+1,
-                callbacks=[]
+                max_epochs=best_epoch + 1,
+                callbacks=[],
             )
             trainer.fit(best_model, datamodule=datamodule)
             trainer.save_checkpoint(best_model_path)

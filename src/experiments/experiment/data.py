@@ -96,12 +96,16 @@ class MyDataModule(L.LightningDataModule):
                 )
             ),
             transformsv2.RandomHorizontalFlip(0.5),
-            transformsv2.RandomRotation(15), # type: ignore
+            transformsv2.RandomRotation(15),  # type: ignore
             transformsv2.Resize((self.image_size, self.image_size)),
             transformsv2.ConvertImageDtype(),
         ]
         if common_config.NORMALIZE:
-            train_transforms.append(transformsv2.Normalize(mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD))
+            train_transforms.append(
+                transformsv2.Normalize(
+                    mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD
+                )
+            )
         self.transform = transformsv2.Compose(train_transforms)
 
         val_transforms = [
@@ -109,7 +113,11 @@ class MyDataModule(L.LightningDataModule):
             transformsv2.ConvertImageDtype(),
         ]
         if common_config.NORMALIZE:
-            val_transforms.append(transformsv2.Normalize(mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD))
+            val_transforms.append(
+                transformsv2.Normalize(
+                    mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD
+                )
+            )
         self.val_transform = transformsv2.Compose(val_transforms)
 
         if not hasattr(self, "train_set"):

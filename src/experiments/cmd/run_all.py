@@ -8,9 +8,8 @@ from experiments.lib.reproducibility import RNG, get_git_sha
 
 SHA = get_git_sha()
 
-MODELS = [
-    (ConvNext, f"{common_config.EXPERIMENT_NAME}/convnext-search_{SHA}")
-]
+MODELS = [(ConvNext, f"{common_config.EXPERIMENT_NAME}/convnext-search_{SHA}")]
+
 
 def main():
     rng = RNG()
