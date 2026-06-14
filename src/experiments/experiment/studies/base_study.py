@@ -19,7 +19,6 @@ class BaseStudy(ABC):
     def __init__(
         self,
         experiment_name: str,
-        try_number: int,
         seed: int,
         base_name: str,
         data_module: DataModule,
@@ -29,7 +28,7 @@ class BaseStudy(ABC):
         optuna_metric: str = "val_loss",
     ) -> None:
         self.name = (
-            f"{experiment_name}/{base_name}-{try_number}-{get_git_sha()}"
+            f"{experiment_name}/{base_name}_{get_git_sha()}"
         )
         self._rng = RNG()
         self._seed = seed
