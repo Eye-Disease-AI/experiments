@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-import lightning as L
 import mlflow
 import optuna
 from optuna import create_study
@@ -13,6 +12,7 @@ from experiments.experiment.data import DataModule
 from experiments.lib.reproducibility import get_git_sha
 from experiments.lib.reproducibility import RNG
 from experiments.lib.mlflow_setup import Experiment
+
 
 class BaseStudy(ABC):
     @abstractmethod
@@ -27,9 +27,7 @@ class BaseStudy(ABC):
         optuna_direction: str = "min",
         optuna_metric: str = "val_loss",
     ) -> None:
-        self.name = (
-            f"{experiment_name}/{base_name}_{get_git_sha()}"
-        )
+        self.name = f"{experiment_name}/{base_name}_{get_git_sha()}"
         self._rng = RNG()
         self._seed = seed
         self._max_trials = max_trials

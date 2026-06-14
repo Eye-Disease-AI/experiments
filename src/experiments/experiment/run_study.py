@@ -71,7 +71,9 @@ def run_study(
         return
 
     study.optimize(
-        lambda trial: objective(datamodule, rng, exp, trial, optuna_metric, optuna_direction, ModelClass),
+        lambda trial: objective(
+            datamodule, rng, exp, trial, optuna_metric, optuna_direction, ModelClass
+        ),
         n_trials=common_config.MAX_TRIALS * 2,
         callbacks=[
             MaxTrialsCallback(

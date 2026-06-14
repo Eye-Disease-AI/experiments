@@ -23,7 +23,15 @@ def main():
         print(f"\n{'=' * 60}")
         print(f"Model: {ModelClass.__name__}, Study: {study_name}")
         print(f"{'=' * 60}\n")
-        run_study(ModelClass, study_name, exp, rng, datamodule, common_config.OPTUNA_METRIC, common_config.OPTUNA_DIRECTION)
+        run_study(
+            ModelClass,
+            study_name,
+            exp,
+            rng,
+            datamodule,
+            common_config.OPTUNA_METRIC,
+            common_config.OPTUNA_DIRECTION,
+        )
 
 
 if __name__ == "__main__":

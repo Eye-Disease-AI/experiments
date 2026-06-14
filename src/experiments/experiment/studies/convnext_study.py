@@ -4,7 +4,10 @@ import optuna
 from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
-from experiments.experiment.objective import BackboneFreezeCallback, OptunaMLflowCallback
+from experiments.experiment.objective import (
+    BackboneFreezeCallback,
+    OptunaMLflowCallback,
+)
 from experiments.experiment.data import DataModule
 from experiments.experiment.models.convnext import ConvNext
 from experiments.experiment.studies.base_study import BaseStudy
