@@ -27,6 +27,8 @@ def run_study(
     exp: Experiment,
     rng: RNG,
     datamodule: MyDataModule,
+    optuna_metric: str,
+    optuna_direction: str,
     retrain=True,
 ):
     study = optuna.create_study(
@@ -69,7 +71,7 @@ def run_study(
         return
 
     study.optimize(
-        lambda trial: objective(datamodule, rng, exp, trial, ModelClass),  # pyright: ignore
+        lambda trial: objective(datamodule, rng, exp, trial, optuna_metric, optuna_direction, ModelClass),
         n_trials=common_config.MAX_TRIALS * 2,
         callbacks=[
             MaxTrialsCallback(

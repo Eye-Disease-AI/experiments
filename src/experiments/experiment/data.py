@@ -1,5 +1,7 @@
 import math
 import os
+from abc import abstractmethod
+from typing_extensions import override
 
 import lightning as L
 import numpy as np
@@ -44,7 +46,29 @@ class SubsetTransformer(torch.utils.data.Dataset):
         return tuple(result)
 
 
-class MyDataModule(L.LightningDataModule):
+class DataModule(L.LightningDataModule):
+    @abstractmethod
+    def get_batch_size(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_batch_size(self, int):
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_n_classes(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_train_class_weights(self) -> torch.Tensor:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_class_names(self) -> list[str]:
+        raise NotImplementedError
+
+
+class MyDataModule(DataModule):
     """Splits to train/val/test subsets with custom transforms"""
 
     def __init__(
@@ -142,6 +166,27 @@ class MyDataModule(L.LightningDataModule):
 
     def test_dataloader(self):
         return self.dataLoaderCommon(self.test_set)
+
+    @override
+    def get_batch_size(self) -> int:
+        return self.batch_size
+
+    @override
+    def set_batch_size(self, batch_size: int):
+        self.batch_size = batch_size
+
+    @override
+    def get_n_classes(self) -> int:
+        return self.dataset.n_classes
+
+    @override
+    def get_train_class_weights(self) -> torch.Tensor:
+        return self.train_class_weights
+
+    @override
+    def get_class_names(self) -> list[str]:
+        idx_to_label = {v: k for k, v in self.dataset.label_to_idx.items()}
+        return [idx_to_label[i] for i in range(len(idx_to_label))]
 
 
 if __name__ == "__main__":

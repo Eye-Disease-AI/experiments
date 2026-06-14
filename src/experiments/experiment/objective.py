@@ -1,5 +1,6 @@
 import time
 
+from experiments.experiment.data import DataModule
 import lightning as L
 import mlflow
 import optuna
@@ -67,6 +68,8 @@ class OptunaMLflowCallback(Callback):
         exp: Experiment,
         run_id: str,
         log_every_n_epochs: int,
+        optuna_metric: str,
+        optuna_direction: str,
     ):
         self.trial = trial
         self.exp = exp
@@ -74,13 +77,15 @@ class OptunaMLflowCallback(Callback):
         self.log_every_n_epochs = log_every_n_epochs
         self.buffer = []
         self.best_value = None
+        self.optuna_metric = optuna_metric
+        self.optuna_direction = optuna_direction
 
     def _flush(self):
         if self.buffer:
             self.exp.client.log_batch(
                 self.run_id,
                 metrics=[
-                    mlflow.entities.Metric(common_config.OPTUNA_METRIC, val, ts, e)
+                    mlflow.entities.Metric(self.optuna_metric, val, ts, e)
                     for e, val, ts in self.buffer
                 ],  # pyright: ignore
             )
@@ -89,7 +94,7 @@ class OptunaMLflowCallback(Callback):
     def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule):
         if trainer.sanity_checking:
             return
-        metric_val = trainer.callback_metrics.get(common_config.OPTUNA_METRIC)
+        metric_val = trainer.callback_metrics.get(self.optuna_metric)
         if metric_val is None:
             return
         epoch = trainer.current_epoch
@@ -99,7 +104,7 @@ class OptunaMLflowCallback(Callback):
             self._flush()
 
         v = metric_val.item()
-        agg = min if common_config.OPTUNA_DIRECTION == "min" else max
+        agg = min if self.optuna_direction == "min" else max
         self.best_value = agg(v, self.best_value) if self.best_value is not None else v
 
         self.trial.report(v, epoch)
@@ -168,10 +173,12 @@ class BackboneFreezeCallback(Callback):
 
 
 def objective(
-    datamodule: L.LightningDataModule,
+    datamodule: DataModule,
     rng: RNG,
     exp: Experiment,
     trial: optuna.trial.Trial,
+    optuna_metric: str,
+    optuna_direction: str,
     ModelClass,
 ):
     rng.set_seed(common_config.SEED)
@@ -185,7 +192,7 @@ def objective(
     datamodule.setup(stage="fit")
     class_weights = datamodule.train_class_weights  # pyright: ignore
     model = ModelClass(
-        n_classes=datamodule.dataset.n_classes,
+        n_classes=datamodule.get_n_classes(),
         lr=lr,
         weight_decay=weight_decay,
         dropout=dropout,
@@ -212,6 +219,8 @@ def objective(
             exp=exp,
             run_id=run.info.run_id,
             log_every_n_epochs=common_config.LOG_EVERY_N_EPOCHS,
+            optuna_metric=optuna_metric,
+            optuna_direction=optuna_direction,
         )
         best_snapshot = BestSnapshotCallback()
         trainer = create_trainer(
