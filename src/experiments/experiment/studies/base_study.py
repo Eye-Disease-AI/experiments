@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
+from dataclasses import dataclass
 
+from experiments.experiment.data import DataModule
 import mlflow
 import optuna
 from optuna import create_study
@@ -8,7 +10,6 @@ from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
 from experiments.experiment.objective import OptunaMLflowCallback
-from experiments.experiment.data import DataModule
 from experiments.lib.reproducibility import get_git_sha
 from experiments.lib.reproducibility import RNG
 from experiments.lib.mlflow_setup import Experiment
@@ -18,30 +19,17 @@ class BaseStudy(ABC):
     @abstractmethod
     def __init__(
         self,
-        experiment_name: str,
-        seed: int,
-        base_name: str,
-        data_module: DataModule,
-        max_trials: int,
-        log_every_n_epochs: int = 1,
-        optuna_direction: str = "min",
-        optuna_metric: str = "val_loss",
+        config: BaseStudyConfig,
     ) -> None:
-        self.name = f"{experiment_name}/{base_name}_{get_git_sha()}"
+        self._config = config
+        self.name = f"{config.experiment_name}_{get_git_sha()}"
         self._rng = RNG()
-        self._seed = seed
-        self._max_trials = max_trials
-        self._data_module = data_module
-        self._experiment_name = experiment_name
-        self.log_every_n_epochs = log_every_n_epochs
-        self.optuna_direction = optuna_direction
-        self.optuna_metric = optuna_metric
 
     @abstractmethod
     def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]: ...
 
     @abstractmethod
-    def _configure_data_module(self, params: dict[str, Any]) -> None: ...
+    def _configure_data_modules(self, params: dict[str, Any]) -> None: ...
 
     @abstractmethod
     def _train(
@@ -52,67 +40,79 @@ class BaseStudy(ABC):
     ) -> None: ...
 
     def run(self) -> None:
-        self._prepare_data_module()
+        self._prepare_data_modules()
         optuna_study, _, already_complete = self._setup_optuna_study(
-            max_trials=self._max_trials
+            max_trials=self._config.max_trials
         )
         if already_complete:
             return
         optuna_study.optimize(
             self._objective,
-            n_trials=self._max_trials * 2,
+            n_trials=self._config.max_trials * 2,
             callbacks=[
                 MaxTrialsCallback(
-                    self._max_trials, states=(TrialState.COMPLETE, TrialState.PRUNED)
+                    self._config.max_trials,
+                    states=(TrialState.COMPLETE, TrialState.PRUNED),
                 )
             ],
         )
         mlflow.end_run()
 
     def _objective(self, trial: optuna.Trial) -> float:
-        self._rng.set_seed(self._seed)
+        self._rng.set_seed(self._config.seed)
 
         params = self._suggest_params(trial)
-        self._configure_data_module(params)
+        self._configure_data_modules(params)
         with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
             trial.set_user_attr("mlflow_run_id", run.info.run_id)
             mlflow.set_tag("optuna_study", self.name)
             mlflow.set_tag("optuna_trial", trial.number)
-            mlflow.log_params({**params, "seed": self._seed})
+            mlflow.log_params({**params, "seed": self._config.seed})
 
             optuna_callback = OptunaMLflowCallback(
                 trial=trial,
-                exp=Experiment(self._experiment_name),
+                exp=Experiment(self._config.experiment_name),
                 run_id=run.info.run_id,
-                log_every_n_epochs=self.log_every_n_epochs,
-                optuna_metric=self.optuna_metric,
-                optuna_direction=self.optuna_direction,
+                log_every_n_epochs=self._config.log_every_n_epochs,
+                optuna_metric=self._config.optuna_metric,
+                optuna_direction=self._config.optuna_direction,
             )
             self._train(params, run, optuna_callback)
 
         best_value = optuna_callback.best_value
         if best_value is None:
-            return float("-inf") if self.optuna_direction == "max" else float("inf")
+            return (
+                float("-inf")
+                if self._config.optuna_direction == "max"
+                else float("inf")
+            )
 
         return best_value
 
-    def _prepare_data_module(self):
-        datamodule = self._data_module
-        self._rng.set_seed(self._seed)
-        datamodule.prepare_data()
-        datamodule.setup("fit")
-        return datamodule
+    # This method should set all needed data modules as class fields and return list of them.
+    @abstractmethod
+    def _init_data_modules(self) -> list[DataModule]: ...
+
+    def _prepare_data_modules(self):
+        self._rng.set_seed(self._config.seed)
+        data_modules = self._init_data_modules()
+
+        for data_module in data_modules:
+            data_module.prepare_data()
+            data_module.setup("fit")
 
     def _setup_optuna_study(
         self, max_trials: int, study_name: str | None = None
     ) -> tuple[optuna.study.Study, mlflow.ActiveRun, bool]:
         """Setup and return Optuna study with MLflow integration."""
-        mlflow_experiment = Experiment(self._experiment_name)
+        mlflow_experiment = Experiment(self._config.experiment_name)
         actual_study_name: str = study_name or self.name
 
         optuna_study = create_study(
             study_name=actual_study_name,
-            direction={"min": "minimize", "max": "maximize"}[self.optuna_direction],
+            direction={"min": "minimize", "max": "maximize"}[
+                self._config.optuna_direction
+            ],
             storage=mlflow_experiment.storage,
             load_if_exists=True,
             pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
@@ -138,9 +138,19 @@ class BaseStudy(ABC):
 
         if n_finished >= max_trials:
             print(
-                f"Study already complete. Best: {optuna_study.best_params}, {self.optuna_metric}: {optuna_study.best_value:.4f}"
+                f"Study already complete. Best: {optuna_study.best_params}, {self._config.optuna_metric}: {optuna_study.best_value:.4f}"
             )
             mlflow.end_run()
             return optuna_study, parent_run, True
 
         return optuna_study, parent_run, False
+
+
+@dataclass
+class BaseStudyConfig(ABC):
+    experiment_name: str
+    seed: int
+    max_trials: int
+    log_every_n_epochs: int
+    optuna_direction: str
+    optuna_metric: str

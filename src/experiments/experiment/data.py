@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from dataclasses import dataclass
 import math
 import os
 from abc import abstractmethod, ABC
@@ -63,78 +65,86 @@ class DataModule(ABC, L.LightningDataModule):
     def get_class_names(self) -> list[str]: ...
 
 
+@dataclass
+class DataModuleConfig(ABC): ...
+
+
+@dataclass
+class DataModuleEntry[DMCfg: DataModuleConfig, DM: DataModule]:
+    data_module_type: Callable[[DMCfg], DM]
+    data_module_config: DMCfg
+
+    def bake(self) -> DM:
+        return self.data_module_type(self.data_module_config)
+
+
 class MyDataModule(DataModule):
     """Splits to train/val/test subsets with custom transforms"""
 
     def __init__(
         self,
-        rng: RNG,
-        batch_size: int = 32,
-        return_paths=False,
-        cache=True,
-        hard_policy=HardPolicy.PASSTHROUGH,
+        config: MyDataModuleConfig,
     ):
         super().__init__()
-        self.dir = DATASET_PATH
-        self.image_size = common_config.IMAGE_SIZE
-        self.image_channels = 3
-        self.input_size = self.image_size * self.image_size * self.image_channels
-        self.return_paths = return_paths
-        self.rng = rng
-        self.batch_size = batch_size
-        self.do_cache = cache
-        self.hard_policy = hard_policy
+        self._dir = DATASET_PATH
+        self._image_channels = 3
+        # TODO: Make private whenever it becomes possible
+        self.config = config
+        self._input_size = (
+            self.config.image_size * self.config.image_size * self._image_channels
+        )
+        self._rng = config.rng
 
     def setup(self, stage: str | None = None):
         max_angle = 15
         max_rad = math.radians(max_angle)
         pre_rot_size = int(
-            math.ceil(self.image_size * (math.sin(max_rad) + math.cos(max_rad)))
+            math.ceil(self.config.image_size * (math.sin(max_rad) + math.cos(max_rad)))
         )
 
         if not hasattr(self, "dataset"):
             self.dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
-                pre_rot_size if self.do_cache else None,
-                self.return_paths,
-                hard_policy=self.hard_policy,
+                pre_rot_size if self.config.cache else None,
+                self.config.return_paths,
+                hard_policy=self.config.hard_policy,
             )
 
         if not hasattr(self, "test_dataset"):
             self.test_dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TestMode(),
-                pre_rot_size if self.do_cache else None,
-                self.return_paths,
-                hard_policy=self.hard_policy,
+                pre_rot_size if self.config.cache else None,
+                self.config.return_paths,
+                hard_policy=self.config.hard_policy,
             )
         train_transforms = [
             transformsv2.Resize(
                 (
-                    int(np.ceil(self.image_size * 1.5)),
-                    int(np.ceil(self.image_size * 1.5)),
+                    int(np.ceil(self.config.image_size * 1.5)),
+                    int(np.ceil(self.config.image_size * 1.5)),
                 )
             ),
             transformsv2.RandomHorizontalFlip(0.5),
             transformsv2.RandomRotation(15),  # type: ignore
-            transformsv2.Resize((self.image_size, self.image_size)),
+            transformsv2.Resize((self.config.image_size, self.config.image_size)),
             transformsv2.ConvertImageDtype(),
         ]
-        if common_config.NORMALIZE:
+        if self.config.normalize:
             train_transforms.append(
                 transformsv2.Normalize(
-                    mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD
+                    mean=self.config.normalize_mean, std=self.config.normalize_std
                 )
             )
         self.transform = transformsv2.Compose(train_transforms)
 
         val_transforms = [
-            transformsv2.Resize((self.image_size, self.image_size)),
+            transformsv2.Resize((self.config.image_size, self.config.image_size)),
             transformsv2.ConvertImageDtype(),
         ]
-        if common_config.NORMALIZE:
+        if self.config.normalize:
             val_transforms.append(
                 transformsv2.Normalize(
-                    mean=common_config.NORMALIZE_MEAN, std=common_config.NORMALIZE_STD
+                    mean=self.config.normalize_mean, std=self.config.normalize_std
                 )
             )
         self.val_transform = transformsv2.Compose(val_transforms)
@@ -150,7 +160,7 @@ class MyDataModule(DataModule):
             self.test_set = SubsetTransformer(test, transform=self.val_transform)
 
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=self.batch_size, num_workers=0, pin_memory=True
+            dataset, batch_size=self.config.batch_size, num_workers=0, pin_memory=True
         )
 
     def train_dataloader(self):
@@ -164,11 +174,11 @@ class MyDataModule(DataModule):
 
     @override
     def get_batch_size(self) -> int:
-        return self.batch_size
+        return self.config.batch_size
 
     @override
     def set_batch_size(self, batch_size: int):
-        self.batch_size = batch_size
+        self.config.batch_size = batch_size
 
     @override
     def get_n_classes(self) -> int:
@@ -184,13 +194,38 @@ class MyDataModule(DataModule):
         return [idx_to_label[i] for i in range(len(idx_to_label))]
 
 
+@dataclass
+class MyDataModuleConfig(DataModuleConfig):
+    rng: RNG
+    batch_size: int
+    return_paths: bool
+    cache: bool
+    hard_policy: HardPolicy
+    image_size: int
+    normalize: bool
+    normalize_std: list[float]
+    normalize_mean: list[float]
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     rng = RNG()
     rng.set_seed(2137)
 
-    datamodule = MyDataModule(rng, return_paths=True, cache=False)
+    datamodule = MyDataModule(
+        MyDataModuleConfig(
+            rng,
+            batch_size=16,
+            return_paths=True,
+            cache=False,
+            hard_policy=HardPolicy.PASSTHROUGH,
+            image_size=224,
+            normalize=common_config.NORMALIZE,
+            normalize_std=common_config.NORMALIZE_STD,
+            normalize_mean=common_config.NORMALIZE_MEAN,
+        )
+    )
     datamodule.prepare_data()
     datamodule.setup()
 

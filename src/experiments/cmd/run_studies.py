@@ -1,41 +1,72 @@
+from dataclasses import replace
+
+from experiments.cmd.run_configs import DEFAULT_CONVNEXT_CONFIG, quick_dev_test
 import torch
 
 from dataset.hard_policy import HardPolicy
-from experiments.experiment.data import MyDataModule
 from experiments.experiment.studies.convnext_study import ConvNextStudy
-from experiments.lib.reproducibility import RNG
-import experiments.experiment.common_config as common_config
-
-rng = RNG()
 
 STUDIES = [
     ConvNextStudy(
-        common_config.EXPERIMENT_NAME + "_dominate",
-        common_config.SEED,
-        common_config.MAX_TRIALS,
-        MyDataModule(rng, hard_policy=HardPolicy.DOMINATE),
-        common_config.EPOCHS,
+        quick_dev_test(
+            replace(
+                DEFAULT_CONVNEXT_CONFIG,
+                experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name + "_dominate",
+                data_module=replace(
+                    DEFAULT_CONVNEXT_CONFIG.data_module,
+                    data_module_config=replace(
+                        DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
+                        hard_policy=HardPolicy.DOMINATE,
+                    ),
+                ),
+            )
+        )
     ),
     ConvNextStudy(
-        common_config.EXPERIMENT_NAME + "_only_hard",
-        common_config.SEED,
-        common_config.MAX_TRIALS,
-        MyDataModule(rng, hard_policy=HardPolicy.ONLY_HARD),
-        common_config.EPOCHS,
+        quick_dev_test(
+            replace(
+                DEFAULT_CONVNEXT_CONFIG,
+                experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name + "_no_hard",
+                data_module=replace(
+                    DEFAULT_CONVNEXT_CONFIG.data_module,
+                    data_module_config=replace(
+                        DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
+                        hard_policy=HardPolicy.NO_HARD,
+                    ),
+                ),
+            )
+        )
     ),
     ConvNextStudy(
-        common_config.EXPERIMENT_NAME + "_no_hard",
-        common_config.SEED,
-        common_config.MAX_TRIALS,
-        MyDataModule(rng, hard_policy=HardPolicy.NO_HARD),
-        common_config.EPOCHS,
+        quick_dev_test(
+            replace(
+                DEFAULT_CONVNEXT_CONFIG,
+                experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name + "_only_hard",
+                data_module=replace(
+                    DEFAULT_CONVNEXT_CONFIG.data_module,
+                    data_module_config=replace(
+                        DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
+                        hard_policy=HardPolicy.ONLY_HARD,
+                    ),
+                ),
+            )
+        )
     ),
     ConvNextStudy(
-        common_config.EXPERIMENT_NAME + "_passthrough",
-        common_config.SEED,
-        common_config.MAX_TRIALS,
-        MyDataModule(rng, hard_policy=HardPolicy.PASSTHROUGH),
-        common_config.EPOCHS,
+        quick_dev_test(
+            replace(
+                DEFAULT_CONVNEXT_CONFIG,
+                experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name
+                + "_passthrough",
+                data_module=replace(
+                    DEFAULT_CONVNEXT_CONFIG.data_module,
+                    data_module_config=replace(
+                        DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
+                        hard_policy=HardPolicy.PASSTHROUGH,
+                    ),
+                ),
+            )
+        )
     ),
 ]
 

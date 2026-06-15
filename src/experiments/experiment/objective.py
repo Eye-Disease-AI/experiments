@@ -85,7 +85,7 @@ class OptunaMLflowCallback(Callback):
             self.exp.client.log_batch(
                 self.run_id,
                 metrics=[
-                    mlflow.entities.Metric(self.optuna_metric, val, ts, e)
+                    mlflow.entities.Metric(self.optuna_metric, val, ts, e)  # type: ignore
                     for e, val, ts in self.buffer
                 ],  # pyright: ignore
             )

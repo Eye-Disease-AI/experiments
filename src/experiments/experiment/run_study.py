@@ -43,7 +43,7 @@ def run_study(
     exp.study = study
     study.set_user_attr("model_class", ModelClass.__name__)
     study.set_user_attr("config", CONFIG_PARAMS)
-    study.set_user_attr("hard_policy", datamodule.hard_policy.name)
+    study.set_user_attr("hard_policy", datamodule.config.hard_policy.name)
 
     n_finished = sum(
         1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
@@ -61,7 +61,7 @@ def run_study(
         mlflow.set_tag("optuna_study", study_name)
         mlflow.set_tag("model", ModelClass.__name__)
         mlflow.log_params(CONFIG_PARAMS)
-        mlflow.log_param("hard_policy", datamodule.hard_policy.name)
+        mlflow.log_param("hard_policy", datamodule.config.hard_policy.name)
 
     if n_finished >= common_config.MAX_TRIALS:
         print(

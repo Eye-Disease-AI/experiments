@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import lightning as L
 import mlflow
 import optuna
@@ -8,30 +10,18 @@ from experiments.experiment.objective import (
     BackboneFreezeCallback,
     OptunaMLflowCallback,
 )
-from experiments.experiment.data import DataModule
+from experiments.experiment.data import DataModule, DataModuleEntry
 from experiments.experiment.models.convnext import ConvNext
-from experiments.experiment.studies.base_study import BaseStudy
+from experiments.experiment.studies.base_study import BaseStudy, BaseStudyConfig
 
 
 class ConvNextStudy(BaseStudy):
-    base_name = "convnext-study"
-
     def __init__(
         self,
-        experiment_name: str,
-        seed: int,
-        max_trials: int,
-        data_module: DataModule,
-        max_epochs: int,
+        config: ConvNextStudyConfig,
     ):
-        super().__init__(
-            experiment_name=experiment_name,
-            seed=seed,
-            base_name=self.base_name,
-            data_module=data_module,
-            max_trials=max_trials,
-        )
-        self.max_epochs = max_epochs
+        super().__init__(config)
+        self._config = config
 
     def _suggest_params(self, trial: optuna.Trial) -> dict:
         return {
@@ -41,7 +31,11 @@ class ConvNextStudy(BaseStudy):
             "batch_size": trial.suggest_categorical("batch_size", [64]),
         }
 
-    def _configure_data_module(self, params: dict) -> None:
+    def _init_data_modules(self) -> list[DataModule]:
+        self._data_module = self._config.data_module.bake()
+        return [self._data_module]
+
+    def _configure_data_modules(self, params: dict) -> None:
         # TODO: Is this best way to do that?
         # I would say it is better to manually create dataset and reuse it to create dataloaders.
         # In other words: just pass dataset to the datamodule class, so it will reuse caches.
@@ -90,7 +84,7 @@ class ConvNextStudy(BaseStudy):
             )
 
         trainer = L.Trainer(
-            max_epochs=self.max_epochs,
+            max_epochs=self._config.max_epochs,
             accelerator="auto",
             logger=mlf_logger,
             callbacks=callbacks,
@@ -103,3 +97,9 @@ class ConvNextStudy(BaseStudy):
         )
 
         trainer.fit(model, datamodule=self._data_module)
+
+
+@dataclass
+class ConvNextStudyConfig(BaseStudyConfig):
+    max_epochs: int
+    data_module: DataModuleEntry

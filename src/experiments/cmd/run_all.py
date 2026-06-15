@@ -1,6 +1,5 @@
-from dataset.hard_policy import HardPolicy
+from experiments.cmd.run_configs import DEFAULT_CONVNEXT_CONFIG
 from experiments.experiment import common_config
-from experiments.experiment.data import MyDataModule
 from experiments.experiment.models.convnext import ConvNext
 from experiments.experiment.run_study import run_study
 from experiments.lib.mlflow_setup import Experiment
@@ -16,7 +15,7 @@ def main():
     rng.set_seed(common_config.SEED)
     exp = Experiment(common_config.EXPERIMENT_NAME)
 
-    datamodule = MyDataModule(rng, hard_policy=HardPolicy.DOMINATE)
+    datamodule = DEFAULT_CONVNEXT_CONFIG.data_module.bake()
     datamodule.prepare_data()
 
     for ModelClass, study_name in MODELS:
