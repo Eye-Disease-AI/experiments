@@ -1,6 +1,6 @@
 import math
 import os
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing_extensions import override
 
 import lightning as L
@@ -46,26 +46,21 @@ class SubsetTransformer(torch.utils.data.Dataset):
         return tuple(result)
 
 
-class DataModule(L.LightningDataModule):
+class DataModule(ABC, L.LightningDataModule):
     @abstractmethod
-    def get_batch_size(self) -> int:
-        raise NotImplementedError
+    def get_batch_size(self) -> int: ...
 
     @abstractmethod
-    def set_batch_size(self, int):
-        raise NotImplementedError
+    def set_batch_size(self, int): ...
 
     @abstractmethod
-    def get_n_classes(self) -> int:
-        raise NotImplementedError
+    def get_n_classes(self) -> int: ...
 
     @abstractmethod
-    def get_train_class_weights(self) -> torch.Tensor:
-        raise NotImplementedError
+    def get_train_class_weights(self) -> torch.Tensor: ...
 
     @abstractmethod
-    def get_class_names(self) -> list[str]:
-        raise NotImplementedError
+    def get_class_names(self) -> list[str]: ...
 
 
 class MyDataModule(DataModule):
