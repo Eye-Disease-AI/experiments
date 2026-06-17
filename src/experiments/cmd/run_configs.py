@@ -30,4 +30,8 @@ DEFAULT_CONVNEXT_CONFIG = ConvNextStudyConfig(
             normalize_mean=common_config.NORMALIZE_MEAN,
         ),
     ),
+    early_stopping_patience=5,
+    backbone_unfreeze_patience=5,
+    use_early_stopping=True,
+    use_freezing=False,
 )

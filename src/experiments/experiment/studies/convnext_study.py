@@ -60,25 +60,20 @@ class ConvNextStudy(BaseStudy):
             prefix="ConvNext",
         )
 
-        early_stopping_patience = 5
-        backbone_unfreeze_patience = 5
-        use_early_stopping = True
-        use_freezing = False
-
-        if use_early_stopping:
+        if self._config.use_early_stopping:
             callbacks.append(
                 EarlyStopping(
                     monitor="val_loss",
-                    patience=early_stopping_patience,
+                    patience=self._config.early_stopping_patience,
                     mode="min",
                 )
             )
 
-        if use_freezing:
+        if self._config.use_freezing:
             callbacks.append(
                 BackboneFreezeCallback(
                     monitor="val_loss",
-                    patience=backbone_unfreeze_patience,
+                    patience=self._config.backbone_unfreeze_patience,
                     mode="min",
                 )
             )
@@ -103,3 +98,7 @@ class ConvNextStudy(BaseStudy):
 class ConvNextStudyConfig(BaseStudyConfig):
     max_epochs: int
     data_module: DataModuleEntry
+    early_stopping_patience: int
+    backbone_unfreeze_patience: int
+    use_early_stopping: bool
+    use_freezing: bool
