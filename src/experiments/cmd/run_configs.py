@@ -1,12 +1,9 @@
-from dataclasses import replace
-
 from dataset.hard_policy import HardPolicy
 from experiments.experiment.data import (
     DataModuleEntry,
     MyDataModule,
     MyDataModuleConfig,
 )
-from experiments.experiment.studies.base_study import BaseStudyConfig
 from experiments.experiment.studies.convnext_study import ConvNextStudyConfig
 import experiments.experiment.common_config as common_config
 from experiments.lib.reproducibility import RNG
@@ -34,7 +31,3 @@ DEFAULT_CONVNEXT_CONFIG = ConvNextStudyConfig(
         ),
     ),
 )
-
-
-def quick_dev_test[SC: BaseStudyConfig](config: SC) -> SC:
-    return replace(config, max_trials=1, max_epochs=1)
