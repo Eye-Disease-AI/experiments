@@ -24,7 +24,7 @@ inner_path = f"{inner_dir_name}/"
 DATASET_PATH = os.path.join(data_path, dataset_name)
 
 @dataclass(frozen=True, kw_only=True)
-class DefaultNuclearCataractDataModuleConfig(DataModuleConfig):
+class NuclearCataractDataModuleConfig(DataModuleConfig):
     name: str = "DefaultNuclearCataractDatamodule"
     seed: int
     batch_size: int
@@ -36,10 +36,10 @@ class DefaultNuclearCataractDataModuleConfig(DataModuleConfig):
     normalize_std: list[float]
     normalize_mean: list[float]
         
-class DefaultNuclearCataractDataModule(DataModule):
+class NuclearCataractDataModule(DataModule):
     def __init__(
         self,
-        config: DefaultNuclearCataractDataModuleConfig,
+        config: NuclearCataractDataModuleConfig,
     ):
         super().__init__()
         self._dir = DATASET_PATH
@@ -134,7 +134,7 @@ class DefaultNuclearCataractDataModule(DataModule):
 
     @override
     @property
-    def config(self) -> DefaultNuclearCataractDataModuleConfig:
+    def config(self) -> NuclearCataractDataModuleConfig:
         return self._config
 
     @override
@@ -187,8 +187,8 @@ if __name__ == "__main__":
     seed = common_config.SEED
     global_seed_rng(seed)
 
-    datamodule = DefaultNuclearCataractDataModule(
-        DefaultNuclearCataractDataModuleConfig(
+    datamodule = NuclearCataractDataModule(
+        NuclearCataractDataModuleConfig(
             seed,
             batch_size=16,
             return_paths=True,

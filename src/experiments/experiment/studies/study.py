@@ -1,9 +1,8 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
 from experiments.experiment import common_config
-from experiments.experiment.datamodules import init_datamodule
 
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 import mlflow
@@ -13,12 +12,14 @@ from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
 from experiments.experiment.objective import OptunaMLflowCallback
+from experiments.experiment.studies._serializing import flatten_dict, study_config_to_dict
 from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
 
 
 @dataclass(frozen=True, kw_only=True)
 class StudyConfig():
+    name: str
     experiment_name: str
     seed: int
     max_trials: int
@@ -27,7 +28,8 @@ class StudyConfig():
     optuna_metric: str
     datamodule_config: DataModuleConfig
 
-class Study():
+class Study(ABC):
+    DEFAULT_CONFIG: StudyConfig
     def __init__(
         self,
         config: StudyConfig,
@@ -35,7 +37,7 @@ class Study():
         self._config = config
         self.name = f"{config.experiment_name}_{get_git_sha()}"
         self.seed = common_config.SEED
-    
+
     @abstractmethod
     def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]: ...
 
@@ -59,6 +61,7 @@ class Study():
         optuna_study, _, already_complete = self._setup_optuna_study(
             max_trials=self._config.max_trials
         )
+
         if already_complete:
             return
         optuna_study.optimize(
@@ -146,6 +149,7 @@ class Study():
             parent_run = mlflow.start_run(run_name=actual_study_name)
             optuna_study.set_user_attr("mlflow_parent_run_id", parent_run.info.run_id)
             mlflow.set_tag("optuna_study", actual_study_name)
+            mlflow.log_params(flatten_dict(study_config_to_dict(self._config)))
 
         if n_finished >= max_trials:
             print(

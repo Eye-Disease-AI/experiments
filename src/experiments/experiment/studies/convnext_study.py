@@ -1,13 +1,16 @@
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal, override
 
+from dataset.hard_policy import HardPolicy
 import lightning as L
 import mlflow
 import optuna
 from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
+from experiments.experiment import common_config
 from experiments.experiment.datamodules import init_datamodule
+from experiments.experiment.datamodules.default_nuclear_cataract import NuclearCataractDataModuleConfig
 from experiments.experiment.objective import (
     BackboneFreezeCallback,
     OptunaMLflowCallback,
@@ -16,7 +19,19 @@ from experiments.experiment.datamodules.datamodule import DataModule, DataModule
 from experiments.experiment.models.convnext import ConvNext
 from experiments.experiment.studies.study import Study, StudyConfig
 
+
+@dataclass(frozen=True, kw_only=True)
+class ConvNextStudyConfig(StudyConfig):
+    name: str = "ConvnextStudy"
+    max_epochs: int
+    datamodule_config: DataModuleConfig
+    early_stopping_patience: int
+    backbone_unfreeze_patience: int
+    use_early_stopping: bool
+    use_freezing: bool
+
 _OptunaParams = Literal["lr", "weight_decay", "dropout", "batch_size"]
+
 class ConvNextStudy(Study):
     def __init__(
         self,
@@ -100,11 +115,27 @@ class ConvNextStudy(Study):
         trainer.fit(model, datamodule=self._datamodule)
 
 
-@dataclass(frozen=True, kw_only=True)
-class ConvNextStudyConfig(StudyConfig):
-    max_epochs: int
-    datamodule_config: DataModuleConfig
-    early_stopping_patience: int
-    backbone_unfreeze_patience: int
-    use_early_stopping: bool
-    use_freezing: bool
+    DEFAULT_CONFIG = ConvNextStudyConfig(
+        experiment_name=common_config.EXPERIMENT_NAME,
+        seed=common_config.SEED,
+        max_trials=common_config.MAX_TRIALS,
+        log_every_n_epochs=common_config.LOG_EVERY_N_EPOCHS,
+        optuna_direction=common_config.OPTUNA_DIRECTION,
+        optuna_metric=common_config.OPTUNA_METRIC,
+        max_epochs=common_config.EPOCHS,
+        datamodule_config=NuclearCataractDataModuleConfig(
+            seed=common_config.SEED,
+            batch_size=32,
+            return_paths=False,
+            cache=common_config.CACHE_SIZE is not None,
+            hard_policy=HardPolicy.PASSTHROUGH,
+            image_size=common_config.CACHE_SIZE,
+            normalize=common_config.NORMALIZE,
+            normalize_std=common_config.NORMALIZE_STD,
+            normalize_mean=common_config.NORMALIZE_MEAN,
+        ),
+        early_stopping_patience=5,
+        backbone_unfreeze_patience=5,
+        use_early_stopping=True,
+        use_freezing=False,
+    )
