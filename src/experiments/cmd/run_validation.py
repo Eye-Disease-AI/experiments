@@ -15,7 +15,7 @@ from experiments.experiment.data import MyDataModule, SubsetTransformer
 from experiments.experiment.objective import create_trainer
 from experiments.experiment.run_study import CONFIG_PARAMS
 from experiments.lib.mlflow_setup import Experiment
-from experiments.lib.reproducibility import RNG, get_git_sha
+from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 import experiments.experiment.models
 
 
@@ -128,7 +128,7 @@ def load_study_hparams(study):
 
 
 def run_kfold_validation(
-    ModelClass, dm, best_params, hard_policy, rng, validation_study_name, K
+    ModelClass, dm, best_params, hard_policy, seed, validation_study_name, K
 ):
     results = []
     dataset = NuclearCataractDataset(
@@ -144,7 +144,7 @@ def run_kfold_validation(
             mlflow.set_tag("fold", i)
             mlflow.set_tag("optuna_study", validation_study_name)
             mlflow.set_tag("validation_sample", "true")
-            rng.set_seed(common_config.SEED)
+            global_seed_rng(seed)
             dm = datamodule_change_subsets(dm, train_sub, val_sub)
             m = train_and_validate(ModelClass, dm, best_params, child_run)
         results.append(m)
@@ -152,7 +152,7 @@ def run_kfold_validation(
 
 
 def run_seeds_validation(
-    ModelClass, dm, best_params, hard_policy, rng, validation_study_name, num_seeds
+    ModelClass, dm, best_params, hard_policy, seed, validation_study_name, num_seeds
 ):
     results = []
     dataset = NuclearCataractDataset(
@@ -169,7 +169,7 @@ def run_seeds_validation(
             mlflow.set_tag("seed", s)
             mlflow.set_tag("optuna_study", validation_study_name)
             mlflow.set_tag("validation_sample", "true")
-            rng.set_seed(s)
+            global_seed_rng(s)
             dm = datamodule_change_subsets(dm, train_sub, val_sub)
             m = train_and_validate(ModelClass, dm, best_params, child_run)
         results.append(m)
@@ -195,10 +195,9 @@ def main():
     ModelClass, best_params, best_epoch, hard_policy = load_study_hparams(study)
 
     # Training init
-    rng = RNG()
-    rng.set_seed(common_config.SEED)
+    seed = global_seed_rng(common_config.SEED)
     datamodule = MyDataModule(
-        rng, batch_size=best_params["batch_size"], hard_policy=HardPolicy[hard_policy]
+        seed, batch_size=best_params["batch_size"], hard_policy=HardPolicy[hard_policy]
     )
     datamodule.setup(stage="fit")
 
@@ -242,7 +241,7 @@ def main():
                 datamodule,
                 best_params,
                 hard_policy,
-                rng,
+                seed,
                 validation_study_name,
                 args.K,
             )
@@ -252,7 +251,7 @@ def main():
                 datamodule,
                 best_params,
                 hard_policy,
-                rng,
+                seed,
                 validation_study_name,
                 args.num_seeds,
             )

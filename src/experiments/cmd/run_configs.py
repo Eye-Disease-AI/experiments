@@ -6,7 +6,6 @@ from experiments.experiment.data import (
 )
 from experiments.experiment.studies.convnext_study import ConvNextStudyConfig
 import experiments.experiment.common_config as common_config
-from experiments.lib.reproducibility import RNG
 
 DEFAULT_CONVNEXT_CONFIG = ConvNextStudyConfig(
     experiment_name=common_config.EXPERIMENT_NAME,
@@ -19,7 +18,7 @@ DEFAULT_CONVNEXT_CONFIG = ConvNextStudyConfig(
     data_module=DataModuleEntry(
         data_module_type=MyDataModule,
         data_module_config=MyDataModuleConfig(
-            rng=RNG(),
+            seed=common_config.SEED,
             batch_size=32,
             return_paths=False,
             cache=common_config.CACHE_SIZE is not None,

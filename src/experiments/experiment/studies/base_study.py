@@ -11,7 +11,6 @@ from optuna.trial import TrialState
 
 from experiments.experiment.objective import OptunaMLflowCallback
 from experiments.lib.reproducibility import get_git_sha
-from experiments.lib.reproducibility import RNG
 from experiments.lib.mlflow_setup import Experiment
 
 
@@ -23,7 +22,7 @@ class BaseStudy(ABC):
     ) -> None:
         self._config = config
         self.name = f"{config.experiment_name}_{get_git_sha()}"
-        self._rng = RNG()
+        self.seed = common_config.SEED
 
     @abstractmethod
     def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]: ...
@@ -59,8 +58,7 @@ class BaseStudy(ABC):
         mlflow.end_run()
 
     def _objective(self, trial: optuna.Trial) -> float:
-        self._rng.set_seed(self._config.seed)
-
+        global_seed_rng(self._config.seed)
         params = self._suggest_params(trial)
         self._configure_data_modules(params)
         with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:

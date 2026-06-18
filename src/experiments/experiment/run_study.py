@@ -11,7 +11,7 @@ from optuna.visualization.matplotlib import (
 from experiments.experiment import common_config
 from experiments.experiment.objective import create_trainer, objective
 from experiments.lib.mlflow_setup import Experiment
-from experiments.lib.reproducibility import RNG
+from experiments.lib.reproducibility import global_seed_rng
 
 
 CONFIG_PARAMS = {
@@ -25,7 +25,7 @@ def run_study(
     ModelClass,
     study_name: str,
     exp: Experiment,
-    rng: RNG,
+    seed: int,
     datamodule: MyDataModule,
     optuna_metric: str,
     optuna_direction: str,
@@ -72,7 +72,7 @@ def run_study(
 
     study.optimize(
         lambda trial: objective(
-            datamodule, rng, exp, trial, optuna_metric, optuna_direction, ModelClass
+            datamodule, seed, exp, trial, optuna_metric, optuna_direction, ModelClass
         ),
         n_trials=common_config.MAX_TRIALS * 2,
         callbacks=[
@@ -102,7 +102,7 @@ def run_study(
         mlflow.log_metric("best_epoch", best_epoch)
 
         best_params = study.best_params
-        rng.set_seed(common_config.SEED)
+        global_seed_rng(seed)
         datamodule.batch_size = best_params["batch_size"]  # pyright: ignore
         datamodule.setup(stage="fit")
         model_params = {k: v for k, v in best_params.items() if k != "batch_size"}

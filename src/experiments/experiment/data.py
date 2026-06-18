@@ -12,7 +12,7 @@ from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
 from experiments.experiment import common_config
-from experiments.lib.reproducibility import RNG
+from experiments.lib.reproducibility import global_seed_rng
 
 data_path = "data"
 if not os.path.exists(data_path):
@@ -196,7 +196,7 @@ class MyDataModule(DataModule):
 
 @dataclass
 class MyDataModuleConfig(DataModuleConfig):
-    rng: RNG
+    seed: int
     batch_size: int
     return_paths: bool
     cache: bool
@@ -209,13 +209,12 @@ class MyDataModuleConfig(DataModuleConfig):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-
-    rng = RNG()
-    rng.set_seed(2137)
+    seed = common_config.SEED
+    global_seed_rng(seed)
 
     datamodule = MyDataModule(
         MyDataModuleConfig(
-            rng,
+            seed,
             batch_size=16,
             return_paths=True,
             cache=False,

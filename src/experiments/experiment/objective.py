@@ -13,7 +13,7 @@ from experiments.experiment.best_snapshot import BestSnapshotCallback
 from experiments.experiment import common_config
 from experiments.lib.log_silencer import stop_logs
 from experiments.lib.mlflow_setup import Experiment
-from experiments.lib.reproducibility import RNG
+from experiments.lib.reproducibility import global_seed_rng
 
 stop_logs()
 
@@ -174,14 +174,14 @@ class BackboneFreezeCallback(Callback):
 
 def objective(
     datamodule: DataModule,
-    rng: RNG,
+    seed: int,
     exp: Experiment,
     trial: optuna.trial.Trial,
     optuna_metric: str,
     optuna_direction: str,
     ModelClass,
 ):
-    rng.set_seed(common_config.SEED)
+    global_seed_rng(seed)
 
     lr = trial.suggest_float("lr", 1e-5, 5e-5, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True)
