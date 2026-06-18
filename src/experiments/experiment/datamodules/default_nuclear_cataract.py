@@ -1,11 +1,7 @@
-from collections.abc import Callable
 from dataclasses import dataclass
 import math
 import os
-from abc import abstractmethod, ABC
 from typing_extensions import override
-
-import lightning as L
 import numpy as np
 import torch
 from dataset.loader import HardPolicy, NuclearCataractDataset
@@ -13,6 +9,7 @@ from torchvision.transforms import v2 as transformsv2
 
 from experiments.experiment import common_config
 from experiments.lib.reproducibility import global_seed_rng
+from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 
 data_path = "data"
 if not os.path.exists(data_path):
@@ -26,8 +23,131 @@ inner_path = f"{inner_dir_name}/"
 
 DATASET_PATH = os.path.join(data_path, dataset_name)
 
+@dataclass(frozen=True, kw_only=True)
+class DefaultNuclearCataractDataModuleConfig(DataModuleConfig):
+    name: str = "DefaultNuclearCataractDatamodule"
+    seed: int
+    batch_size: int
+    return_paths: bool
+    cache: bool
+    hard_policy: HardPolicy
+    image_size: int
+    normalize: bool
+    normalize_std: list[float]
+    normalize_mean: list[float]
+        
+class DefaultNuclearCataractDataModule(DataModule):
+    def __init__(
+        self,
+        config: DefaultNuclearCataractDataModuleConfig,
+    ):
+        super().__init__()
+        self._dir = DATASET_PATH
+        self._image_channels = 3
+        self._config = config
+        self._input_size = (
+            self._config.image_size * self._config.image_size * self._image_channels
+        )
+        self.train_class_weights = None
 
-class SubsetTransformer(torch.utils.data.Dataset):
+    @override
+    def setup(self, stage: str | None = None):
+        max_angle = 15
+        max_rad = math.radians(max_angle)
+        pre_rot_size = int(
+            math.ceil(self._config.image_size * (math.sin(max_rad) + math.cos(max_rad)))
+        )
+
+        if not hasattr(self, "dataset"):
+            self.dataset = NuclearCataractDataset(
+                NuclearCataractDataset.TrainValMode(0.8, 0.2),
+                pre_rot_size if self._config.cache else None,
+                self._config.return_paths,
+                hard_policy=self._config.hard_policy,
+            )
+
+        if not hasattr(self, "test_dataset"):
+            self.test_dataset = NuclearCataractDataset(
+                NuclearCataractDataset.TestMode(),
+                pre_rot_size if self._config.cache else None,
+                self._config.return_paths,
+                hard_policy=self._config.hard_policy,
+            )
+        train_transforms = [
+            transformsv2.Resize(
+                (
+                    int(np.ceil(self._config.image_size * 1.5)),
+                    int(np.ceil(self._config.image_size * 1.5)),
+                )
+            ),
+            transformsv2.RandomHorizontalFlip(0.5),
+            transformsv2.RandomRotation(15),  # type: ignore
+            transformsv2.Resize((self._config.image_size, self._config.image_size)),
+            transformsv2.ConvertImageDtype(),
+        ]
+        if self._config.normalize:
+            train_transforms.append(
+                transformsv2.Normalize(
+                    mean=self._config.normalize_mean, std=self._config.normalize_std
+                )
+            )
+        self.transform = transformsv2.Compose(train_transforms)
+
+        val_transforms = [
+            transformsv2.Resize((self._config.image_size, self._config.image_size)),
+            transformsv2.ConvertImageDtype(),
+        ]
+        if self._config.normalize:
+            val_transforms.append(
+                transformsv2.Normalize(
+                    mean=self._config.normalize_mean, std=self._config.normalize_std
+                )
+            )
+        self.val_transform = transformsv2.Compose(val_transforms)
+
+        if not hasattr(self, "train_set"):
+            train = self.dataset.train_set()
+            self.train_class_weights = train.class_weights()
+            val = self.dataset.val_set()
+            test = self.test_dataset.test_set()
+
+            self.train_set = _SubsetTransformer(train, transform=self.transform)
+            self.val_set = _SubsetTransformer(val, transform=self.val_transform)
+            self.test_set = _SubsetTransformer(test, transform=self.val_transform)
+
+        self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
+            dataset, batch_size=self._config.batch_size, num_workers=0, pin_memory=True
+        )
+
+    @override
+    def train_dataloader(self):
+        return self.dataLoaderCommon(self.train_set)
+
+    @override
+    def val_dataloader(self):
+        return self.dataLoaderCommon(self.val_set)
+
+    @override
+    def test_dataloader(self):
+        return self.dataLoaderCommon(self.test_set)
+
+    @override
+    @property
+    def config(self) -> DefaultNuclearCataractDataModuleConfig:
+        return self._config
+
+    @override
+    @property
+    def n_classes(self) -> int:
+        return self.dataset.n_classes
+
+    @override
+    @property
+    def class_names(self) -> list[str]:
+        idx_to_label = {v: k for k, v in self.dataset.label_to_idx.items()}
+        return [idx_to_label[i] for i in range(len(idx_to_label))]
+
+class _SubsetTransformer(torch.utils.data.Dataset):
     """Wrapper for subset that allows applying different transforms on each dataset subset (train, val, test)"""
 
     def __init__(self, subset, transform=None, cache=True):
@@ -48,163 +168,6 @@ class SubsetTransformer(torch.utils.data.Dataset):
         return tuple(result)
 
 
-class DataModule(ABC, L.LightningDataModule):
-    @abstractmethod
-    def get_batch_size(self) -> int: ...
-
-    @abstractmethod
-    def set_batch_size(self, int): ...
-
-    @abstractmethod
-    def get_n_classes(self) -> int: ...
-
-    @abstractmethod
-    def get_train_class_weights(self) -> torch.Tensor: ...
-
-    @abstractmethod
-    def get_class_names(self) -> list[str]: ...
-
-
-@dataclass
-class DataModuleConfig(ABC): ...
-
-
-@dataclass
-class DataModuleEntry[DMCfg: DataModuleConfig, DM: DataModule]:
-    data_module_type: Callable[[DMCfg], DM]
-    data_module_config: DMCfg
-
-    def bake(self) -> DM:
-        return self.data_module_type(self.data_module_config)
-
-
-class MyDataModule(DataModule):
-    """Splits to train/val/test subsets with custom transforms"""
-
-    def __init__(
-        self,
-        config: MyDataModuleConfig,
-    ):
-        super().__init__()
-        self._dir = DATASET_PATH
-        self._image_channels = 3
-        # TODO: Make private whenever it becomes possible
-        self.config = config
-        self._input_size = (
-            self.config.image_size * self.config.image_size * self._image_channels
-        )
-        self._rng = config.rng
-
-    def setup(self, stage: str | None = None):
-        max_angle = 15
-        max_rad = math.radians(max_angle)
-        pre_rot_size = int(
-            math.ceil(self.config.image_size * (math.sin(max_rad) + math.cos(max_rad)))
-        )
-
-        if not hasattr(self, "dataset"):
-            self.dataset = NuclearCataractDataset(
-                NuclearCataractDataset.TrainValMode(0.8, 0.2),
-                pre_rot_size if self.config.cache else None,
-                self.config.return_paths,
-                hard_policy=self.config.hard_policy,
-            )
-
-        if not hasattr(self, "test_dataset"):
-            self.test_dataset = NuclearCataractDataset(
-                NuclearCataractDataset.TestMode(),
-                pre_rot_size if self.config.cache else None,
-                self.config.return_paths,
-                hard_policy=self.config.hard_policy,
-            )
-        train_transforms = [
-            transformsv2.Resize(
-                (
-                    int(np.ceil(self.config.image_size * 1.5)),
-                    int(np.ceil(self.config.image_size * 1.5)),
-                )
-            ),
-            transformsv2.RandomHorizontalFlip(0.5),
-            transformsv2.RandomRotation(15),  # type: ignore
-            transformsv2.Resize((self.config.image_size, self.config.image_size)),
-            transformsv2.ConvertImageDtype(),
-        ]
-        if self.config.normalize:
-            train_transforms.append(
-                transformsv2.Normalize(
-                    mean=self.config.normalize_mean, std=self.config.normalize_std
-                )
-            )
-        self.transform = transformsv2.Compose(train_transforms)
-
-        val_transforms = [
-            transformsv2.Resize((self.config.image_size, self.config.image_size)),
-            transformsv2.ConvertImageDtype(),
-        ]
-        if self.config.normalize:
-            val_transforms.append(
-                transformsv2.Normalize(
-                    mean=self.config.normalize_mean, std=self.config.normalize_std
-                )
-            )
-        self.val_transform = transformsv2.Compose(val_transforms)
-
-        if not hasattr(self, "train_set"):
-            train = self.dataset.train_set()
-            self.train_class_weights = train.class_weights()
-            val = self.dataset.val_set()
-            test = self.test_dataset.test_set()
-
-            self.train_set = SubsetTransformer(train, transform=self.transform)
-            self.val_set = SubsetTransformer(val, transform=self.val_transform)
-            self.test_set = SubsetTransformer(test, transform=self.val_transform)
-
-        self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=self.config.batch_size, num_workers=0, pin_memory=True
-        )
-
-    def train_dataloader(self):
-        return self.dataLoaderCommon(self.train_set)
-
-    def val_dataloader(self):
-        return self.dataLoaderCommon(self.val_set)
-
-    def test_dataloader(self):
-        return self.dataLoaderCommon(self.test_set)
-
-    @override
-    def get_batch_size(self) -> int:
-        return self.config.batch_size
-
-    @override
-    def set_batch_size(self, batch_size: int):
-        self.config.batch_size = batch_size
-
-    @override
-    def get_n_classes(self) -> int:
-        return self.dataset.n_classes
-
-    @override
-    def get_train_class_weights(self) -> torch.Tensor:
-        return self.train_class_weights
-
-    @override
-    def get_class_names(self) -> list[str]:
-        idx_to_label = {v: k for k, v in self.dataset.label_to_idx.items()}
-        return [idx_to_label[i] for i in range(len(idx_to_label))]
-
-
-@dataclass
-class MyDataModuleConfig(DataModuleConfig):
-    seed: int
-    batch_size: int
-    return_paths: bool
-    cache: bool
-    hard_policy: HardPolicy
-    image_size: int
-    normalize: bool
-    normalize_std: list[float]
-    normalize_mean: list[float]
 
 
 if __name__ == "__main__":
@@ -212,8 +175,8 @@ if __name__ == "__main__":
     seed = common_config.SEED
     global_seed_rng(seed)
 
-    datamodule = MyDataModule(
-        MyDataModuleConfig(
+    datamodule = DefaultNuclearCataractDataModule(
+        DefaultNuclearCataractDataModuleConfig(
             seed,
             batch_size=16,
             return_paths=True,

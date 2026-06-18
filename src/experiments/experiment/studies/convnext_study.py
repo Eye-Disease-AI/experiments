@@ -6,22 +6,24 @@ import optuna
 from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
+from experiments.experiment.datamodules import init_datamodule
 from experiments.experiment.objective import (
     BackboneFreezeCallback,
     OptunaMLflowCallback,
 )
-from experiments.experiment.data import DataModule, DataModuleEntry
+from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.experiment.models.convnext import ConvNext
-from experiments.experiment.studies.base_study import BaseStudy, BaseStudyConfig
+from experiments.experiment.studies.base_study import BaselineStudy, BaselineStudyConfig
 
 
-class ConvNextStudy(BaseStudy):
+class ConvNextStudy(BaselineStudy):
     def __init__(
         self,
         config: ConvNextStudyConfig,
     ):
         super().__init__(config)
         self._config = config
+        self._datamodule = init_datamodule(self._config.datamodule_config)
 
     def _suggest_params(self, trial: optuna.Trial) -> dict:
         return {
@@ -31,25 +33,25 @@ class ConvNextStudy(BaseStudy):
             "batch_size": trial.suggest_categorical("batch_size", [64]),
         }
 
-    def _init_data_modules(self) -> list[DataModule]:
-        self._data_module = self._config.data_module.bake()
-        return [self._data_module]
+    def _init_datamodules(self) -> list[DataModule]:
+        self._datamodule = init_datamodule(self._config.datamodule_config)
+        return [self._datamodule]
 
-    def _configure_data_modules(self, params: dict) -> None:
+    def _configure_datamodules(self, params: dict) -> None:
         # TODO: Is this best way to do that?
         # I would say it is better to manually create dataset and reuse it to create dataloaders.
         # In other words: just pass dataset to the datamodule class, so it will reuse caches.
-        self._data_module.set_batch_size(params["batch_size"])
+        pass
 
     def _train(
         self, params: dict, run: mlflow.ActiveRun, optuna_callback: OptunaMLflowCallback
     ) -> None:
         model = ConvNext(
-            n_classes=self._data_module.get_n_classes(),
+            n_classes=self._datamodule.n_classes,
             lr=params["lr"],
             weight_decay=params["weight_decay"],
             dropout=params["dropout"],
-            class_weights=self._data_module.get_train_class_weights(),
+            class_weights=self._datamodule.train_class_weights,
         )
 
         callbacks: list[L.Callback] = [optuna_callback]
@@ -91,13 +93,13 @@ class ConvNextStudy(BaseStudy):
             deterministic=True,
         )
 
-        trainer.fit(model, datamodule=self._data_module)
+        trainer.fit(model, datamodule=self._datamodule)
 
 
-@dataclass
-class ConvNextStudyConfig(BaseStudyConfig):
+@dataclass(frozen=True, kw_only=True)
+class ConvNextStudyConfig(BaselineStudyConfig):
     max_epochs: int
-    data_module: DataModuleEntry
+    datamodule_config: DataModuleConfig
     early_stopping_patience: int
     backbone_unfreeze_patience: int
     use_early_stopping: bool

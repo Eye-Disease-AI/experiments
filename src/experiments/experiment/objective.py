@@ -1,6 +1,6 @@
 import time
 
-from experiments.experiment.data import DataModule
+from experiments.experiment.datamodules.default_nuclear_cataract import DataModule
 import lightning as L
 import mlflow
 import optuna
@@ -192,7 +192,7 @@ def objective(
     datamodule.setup(stage="fit")
     class_weights = datamodule.train_class_weights  # pyright: ignore
     model = ModelClass(
-        n_classes=datamodule.get_n_classes(),
+        n_classes=datamodule.n_classes,
         lr=lr,
         weight_decay=weight_decay,
         dropout=dropout,

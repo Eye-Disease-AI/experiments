@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import mlflow
 import optuna
-from experiments.experiment.data import MyDataModule
+from experiments.experiment.datamodules.datamodule import DataModule
+from experiments.experiment.datamodules.datamodule import DataModule
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (
@@ -26,7 +27,7 @@ def run_study(
     study_name: str,
     exp: Experiment,
     seed: int,
-    datamodule: MyDataModule,
+    datamodule: DataModule,
     optuna_metric: str,
     optuna_direction: str,
     retrain=True,
@@ -43,7 +44,7 @@ def run_study(
     exp.study = study
     study.set_user_attr("model_class", ModelClass.__name__)
     study.set_user_attr("config", CONFIG_PARAMS)
-    study.set_user_attr("hard_policy", datamodule.config.hard_policy.name)
+    study.set_user_attr("hard_policy", datamodule.config.hard_policy)
 
     n_finished = sum(
         1 for t in study.trials if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
@@ -61,7 +62,7 @@ def run_study(
         mlflow.set_tag("optuna_study", study_name)
         mlflow.set_tag("model", ModelClass.__name__)
         mlflow.log_params(CONFIG_PARAMS)
-        mlflow.log_param("hard_policy", datamodule.config.hard_policy.name)
+        mlflow.log_param("hard_policy", datamodule.config.hard_policy)
 
     if n_finished >= common_config.MAX_TRIALS:
         print(

@@ -11,7 +11,7 @@ import optuna
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
 from experiments.experiment.best_snapshot import BestSnapshotCallback
 from experiments.experiment import common_config
-from experiments.experiment.data import MyDataModule, SubsetTransformer
+from experiments.experiment.datamodules.default_nuclear_cataract import _SubsetTransformer, DefaultNuclearCataractDataModule
 from experiments.experiment.objective import create_trainer
 from experiments.experiment.run_study import CONFIG_PARAMS
 from experiments.lib.mlflow_setup import Experiment
@@ -55,16 +55,16 @@ def coerce_config(current, v):
 
 
 def datamodule_change_subsets(
-    dm: MyDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset
+    dm: DefaultNuclearCataractDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset
 ):
-    dm.train_set = SubsetTransformer(train_sub, transform=dm.transform)
-    dm.val_set = SubsetTransformer(val_sub, transform=dm.val_transform)
+    dm.train_set = _SubsetTransformer(train_sub, transform=dm.transform)
+    dm.val_set = _SubsetTransformer(val_sub, transform=dm.val_transform)
     dm.train_class_weights = train_sub.class_weights()
     return dm
 
 
 def train_and_validate(
-    ModelClass, dm: MyDataModule, best_params, run, snapshot_prefix=None
+    ModelClass, dm: DefaultNuclearCataractDataModule, best_params, run, snapshot_prefix=None
 ):
     params = {k: v for k, v in best_params.items() if k != "batch_size"}
     model = ModelClass(
@@ -196,7 +196,7 @@ def main():
 
     # Training init
     seed = global_seed_rng(common_config.SEED)
-    datamodule = MyDataModule(
+    datamodule = DefaultNuclearCataractDataModule(
         seed, batch_size=best_params["batch_size"], hard_policy=HardPolicy[hard_policy]
     )
     datamodule.setup(stage="fit")

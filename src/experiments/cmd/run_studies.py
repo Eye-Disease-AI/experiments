@@ -1,22 +1,20 @@
 from dataclasses import replace
 
 from experiments.cmd.run_configs import DEFAULT_CONVNEXT_CONFIG
+from experiments.experiment.studies.base_study import BaselineStudy
 import torch
 
 from dataset.hard_policy import HardPolicy
 from experiments.experiment.studies.convnext_study import ConvNextStudy
 
-STUDIES = [
+STUDIES: list[BaselineStudy] = [
     ConvNextStudy(
         replace(
             DEFAULT_CONVNEXT_CONFIG,
             experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name + "_dominate",
-            data_module=replace(
-                DEFAULT_CONVNEXT_CONFIG.data_module,
-                data_module_config=replace(
-                    DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
-                    hard_policy=HardPolicy.DOMINATE,
-                ),
+            datamodule_config=replace(
+                DEFAULT_CONVNEXT_CONFIG.datamodule_config,
+                hard_policy=HardPolicy.DOMINATE,
             ),
         )
     ),
@@ -24,12 +22,9 @@ STUDIES = [
         replace(
             DEFAULT_CONVNEXT_CONFIG,
             experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name + "_no_hard",
-            data_module=replace(
-                DEFAULT_CONVNEXT_CONFIG.data_module,
-                data_module_config=replace(
-                    DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
-                    hard_policy=HardPolicy.NO_HARD,
-                ),
+            datamodule_config=replace(
+                DEFAULT_CONVNEXT_CONFIG.datamodule_config,
+                hard_policy=HardPolicy.NO_HARD,
             ),
         )
     ),
@@ -37,12 +32,9 @@ STUDIES = [
         replace(
             DEFAULT_CONVNEXT_CONFIG,
             experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name + "_only_hard",
-            data_module=replace(
-                DEFAULT_CONVNEXT_CONFIG.data_module,
-                data_module_config=replace(
-                    DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
-                    hard_policy=HardPolicy.ONLY_HARD,
-                ),
+            datamodule_config=replace(
+                DEFAULT_CONVNEXT_CONFIG.datamodule_config,
+                hard_policy=HardPolicy.ONLY_HARD,
             ),
         )
     ),
@@ -50,12 +42,9 @@ STUDIES = [
         replace(
             DEFAULT_CONVNEXT_CONFIG,
             experiment_name=DEFAULT_CONVNEXT_CONFIG.experiment_name + "_passthrough",
-            data_module=replace(
-                DEFAULT_CONVNEXT_CONFIG.data_module,
-                data_module_config=replace(
-                    DEFAULT_CONVNEXT_CONFIG.data_module.data_module_config,
-                    hard_policy=HardPolicy.PASSTHROUGH,
-                ),
+            datamodule_config=replace(
+                DEFAULT_CONVNEXT_CONFIG.datamodule_config,
+                hard_policy=HardPolicy.PASSTHROUGH,
             ),
         )
     ),

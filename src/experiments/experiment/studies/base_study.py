@@ -1,8 +1,11 @@
-from abc import ABC, abstractmethod
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
 
-from experiments.experiment.data import DataModule
+from experiments.experiment import common_config
+from experiments.experiment.datamodules import init_datamodule
+from experiments.experiment.studies.study import Study, StudyConfig
+
+from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 import mlflow
 import optuna
 from optuna import create_study
@@ -10,27 +13,38 @@ from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
 from experiments.experiment.objective import OptunaMLflowCallback
-from experiments.lib.reproducibility import get_git_sha
+from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
 
 
-class BaseStudy(ABC):
-    @abstractmethod
+@dataclass(frozen=True, kw_only=True)
+class BaselineStudyConfig(StudyConfig):
+    max_trials: int
+    log_every_n_epochs: int
+    optuna_direction: str
+    optuna_metric: str
+    datamodule_config: DataModuleConfig
+
+class BaselineStudy(Study):
     def __init__(
         self,
-        config: BaseStudyConfig,
+        config: BaselineStudyConfig,
     ) -> None:
         self._config = config
         self.name = f"{config.experiment_name}_{get_git_sha()}"
         self.seed = common_config.SEED
+        
+    def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]:
+        ret = {}
+        ret["lr"] = trial.suggest_float("lr", 1e-5, 5e-5, log=True)
+        ret["weight_decay"] = trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True)
+        ret["dropout"] = trial.suggest_float("dropout", 0.1, 0.3)
+        ret["batch_size"] = trial.suggest_categorical("batch_size", [64])
+        return ret
 
-    @abstractmethod
-    def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]: ...
+    def _configure_datamodules(self, params: dict[str, Any]) -> None:
+        self.datamodule = init_datamodule(self._config.datamodule_config)
 
-    @abstractmethod
-    def _configure_data_modules(self, params: dict[str, Any]) -> None: ...
-
-    @abstractmethod
     def _train(
         self,
         params: dict[str, Any],
@@ -39,7 +53,7 @@ class BaseStudy(ABC):
     ) -> None: ...
 
     def run(self) -> None:
-        self._prepare_data_modules()
+        self._prepare_datamodules()
         optuna_study, _, already_complete = self._setup_optuna_study(
             max_trials=self._config.max_trials
         )
@@ -60,7 +74,7 @@ class BaseStudy(ABC):
     def _objective(self, trial: optuna.Trial) -> float:
         global_seed_rng(self._config.seed)
         params = self._suggest_params(trial)
-        self._configure_data_modules(params)
+        self._configure_datamodules(params)
         with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
             trial.set_user_attr("mlflow_run_id", run.info.run_id)
             mlflow.set_tag("optuna_study", self.name)
@@ -88,12 +102,11 @@ class BaseStudy(ABC):
         return best_value
 
     # This method should set all needed data modules as class fields and return list of them.
-    @abstractmethod
-    def _init_data_modules(self) -> list[DataModule]: ...
+    def _init_datamodules(self) -> list[DataModule]: ...
 
-    def _prepare_data_modules(self):
-        self._rng.set_seed(self._config.seed)
-        data_modules = self._init_data_modules()
+    def _prepare_datamodules(self):
+        global_seed_rng(self._config.seed)
+        data_modules = self._init_datamodules()
 
         for data_module in data_modules:
             data_module.prepare_data()
@@ -142,13 +155,3 @@ class BaseStudy(ABC):
             return optuna_study, parent_run, True
 
         return optuna_study, parent_run, False
-
-
-@dataclass
-class BaseStudyConfig(ABC):
-    experiment_name: str
-    seed: int
-    max_trials: int
-    log_every_n_epochs: int
-    optuna_direction: str
-    optuna_metric: str

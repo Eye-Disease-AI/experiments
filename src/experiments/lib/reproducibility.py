@@ -1,7 +1,7 @@
 import subprocess
 import lightning as L
 
-def global_seed_rng(self, seed):
+def global_seed_rng(seed):
     L.seed_everything(seed)
 
 def get_git_sha() -> str:
