@@ -49,6 +49,7 @@ class DefaultNuclearCataractDataModule(DataModule):
             self._config.image_size * self._config.image_size * self._image_channels
         )
         self.train_class_weights = None
+        self._batch_size = self._config.batch_size
 
     @override
     def setup(self, stage: str | None = None):
@@ -146,6 +147,17 @@ class DefaultNuclearCataractDataModule(DataModule):
     def class_names(self) -> list[str]:
         idx_to_label = {v: k for k, v in self.dataset.label_to_idx.items()}
         return [idx_to_label[i] for i in range(len(idx_to_label))]
+
+    @override
+    @property
+    def batch_size(self):
+        return self._batch_size
+    
+    @override
+    @batch_size.setter
+    def batch_size(self, v: int):
+        assert v > 0
+        self._batch_size = v
 
 class _SubsetTransformer(torch.utils.data.Dataset):
     """Wrapper for subset that allows applying different transforms on each dataset subset (train, val, test)"""

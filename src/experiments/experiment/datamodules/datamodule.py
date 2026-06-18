@@ -26,6 +26,13 @@ class DataModule(ABC, L.LightningDataModule):
     @abstractmethod
     def class_names(self) -> list[str]: ...
 
+    @property
+    @abstractmethod
+    def batch_size(self) -> int: ...
+    @batch_size.setter
+    @abstractmethod
+    def batch_size(self, v: int): ...
+
     # Require defining LightningDataModule methods
     @abstractmethod
     def setup(self: DataModule, stage: str | None = None) -> None: ...

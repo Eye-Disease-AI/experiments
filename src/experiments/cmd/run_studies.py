@@ -1,13 +1,13 @@
 from dataclasses import replace
 
 from experiments.cmd.run_configs import DEFAULT_CONVNEXT_CONFIG
-from experiments.experiment.studies.base_study import BaselineStudy
+from experiments.experiment.studies.study import Study
 import torch
 
 from dataset.hard_policy import HardPolicy
 from experiments.experiment.studies.convnext_study import ConvNextStudy
 
-STUDIES: list[BaselineStudy] = [
+STUDIES: list[Study] = [
     ConvNextStudy(
         replace(
             DEFAULT_CONVNEXT_CONFIG,
