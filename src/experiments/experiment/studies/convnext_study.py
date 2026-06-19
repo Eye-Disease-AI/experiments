@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, override
+from typing import Literal
 
 from dataset.hard_policy import HardPolicy
 import lightning as L
@@ -10,7 +10,9 @@ from lightning.pytorch.loggers import MLFlowLogger
 
 from experiments.experiment import common_config
 from experiments.experiment.datamodules import init_datamodule
-from experiments.experiment.datamodules.default_nuclear_cataract import NuclearCataractDataModuleConfig
+from experiments.experiment.datamodules.default_nuclear_cataract import (
+    NuclearCataractDataModuleConfig,
+)
 from experiments.experiment.objective import (
     BackboneFreezeCallback,
     OptunaMLflowCallback,
@@ -30,7 +32,9 @@ class ConvNextStudyConfig(StudyConfig):
     use_early_stopping: bool
     use_freezing: bool
 
+
 _OptunaParams = Literal["lr", "weight_decay", "dropout", "batch_size"]
+
 
 class ConvNextStudy(Study):
     def __init__(
@@ -46,7 +50,7 @@ class ConvNextStudy(Study):
             "lr": trial.suggest_float("lr", 1e-6, 1e-4, log=True),
             "weight_decay": trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True),
             "dropout": trial.suggest_float("dropout", 0.0, 0.5),
-            "batch_size": trial.suggest_categorical("batch_size", [64])
+            "batch_size": trial.suggest_categorical("batch_size", [64]),
         }
         return d
 
@@ -58,7 +62,6 @@ class ConvNextStudy(Study):
         # TODO: Is this best way to do that?
         # I would say it is better to manually create dataset and reuse it to create dataloaders.
         # In other words: just pass dataset to the datamodule class, so it will reuse caches.
-        # self._datamodule.property = params["property"]
         self._datamodule.batch_size = params["batch_size"]
         pass
 
@@ -113,7 +116,6 @@ class ConvNextStudy(Study):
         )
 
         trainer.fit(model, datamodule=self._datamodule)
-
 
     DEFAULT_CONFIG = ConvNextStudyConfig(
         experiment_name=common_config.EXPERIMENT_NAME,
