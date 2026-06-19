@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import math
 import os
+from dataset.hard_policy import HardPolicyType
 from typing_extensions import override
 import numpy as np
 import torch
@@ -23,6 +24,7 @@ inner_path = f"{inner_dir_name}/"
 
 DATASET_PATH = os.path.join(data_path, dataset_name)
 
+
 @dataclass(frozen=True, kw_only=True)
 class NuclearCataractDataModuleConfig(DataModuleConfig):
     name: str = "DefaultNuclearCataractDatamodule"
@@ -30,12 +32,13 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     batch_size: int
     return_paths: bool
     cache: bool
-    hard_policy: HardPolicy
+    hard_policy: HardPolicyType
     image_size: int
     normalize: bool
     normalize_std: list[float]
     normalize_mean: list[float]
-        
+
+
 class NuclearCataractDataModule(DataModule):
     def __init__(
         self,
@@ -152,12 +155,13 @@ class NuclearCataractDataModule(DataModule):
     @property
     def batch_size(self):
         return self._batch_size
-    
+
     @override
     @batch_size.setter
     def batch_size(self, v: int):
         assert v > 0
         self._batch_size = v
+
 
 class _SubsetTransformer(torch.utils.data.Dataset):
     """Wrapper for subset that allows applying different transforms on each dataset subset (train, val, test)"""
@@ -180,10 +184,9 @@ class _SubsetTransformer(torch.utils.data.Dataset):
         return tuple(result)
 
 
-
-
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
+
     seed = common_config.SEED
     global_seed_rng(seed)
 

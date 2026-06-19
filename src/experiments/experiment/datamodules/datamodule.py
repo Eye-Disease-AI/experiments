@@ -1,17 +1,16 @@
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-from dataset import hard_policy
-import torch
 import lightning as L
 from torch.utils.data.dataloader import DataLoader
 from ._names import DataModuleType
 
+
 @dataclass(frozen=True, kw_only=True)
-class DataModuleConfig():
+class DataModuleConfig:
     batch_size: int
     # name of the datamodule used for serializing its type to allow reconstruction
     name: DataModuleType
-    hard_policy: hard_policy.HardPolicyType
+
 
 class DataModule(ABC, L.LightningDataModule):
     @property
