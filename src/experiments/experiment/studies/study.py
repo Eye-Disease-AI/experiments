@@ -4,7 +4,7 @@ from typing import Any
 
 from experiments.experiment import common_config
 
-from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
+from experiments.experiment.datamodules.datamodule import DataModule
 import mlflow
 import optuna
 from optuna import create_study
@@ -12,13 +12,16 @@ from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
 from experiments.experiment.objective import OptunaMLflowCallback
-from experiments.experiment.studies._serializing import flatten_dict, study_config_to_dict
+from experiments.experiment.studies._serializing import (
+    flatten_dict,
+    study_config_to_dict,
+)
 from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
 
 
 @dataclass(frozen=True, kw_only=True)
-class StudyConfig():
+class StudyConfig:
     name: str
     experiment_name: str
     seed: int
@@ -26,10 +29,11 @@ class StudyConfig():
     log_every_n_epochs: int
     optuna_direction: str
     optuna_metric: str
-    datamodule_config: DataModuleConfig
+
 
 class Study(ABC):
     DEFAULT_CONFIG: StudyConfig
+
     def __init__(
         self,
         config: StudyConfig,
@@ -105,7 +109,6 @@ class Study(ABC):
             )
 
         return best_value
-
 
     def _prepare_datamodules(self):
         global_seed_rng(self._config.seed)
