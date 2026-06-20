@@ -29,16 +29,16 @@ from experiments.lib.config_serializing import (
 
 @dataclass(frozen=True, kw_only=True)
 class BaseClassifierModelConfig(ClassConfig):
-    optimizer: PackagePath
-    loss_fn: PackagePath
-    scheduler: PackagePath | None
-    scheduler_max_t: int
-    scheduler_min_lr: float
-    backbone_lr_factor: float
-    n_classes: int
-    class_weights: list[float] | None
-    learning_rate: float
-    weight_decay: float | None
+    optimizer: PackagePath = serialize_class(AdamW)
+    loss_fn: PackagePath = serialize_class(nn.CrossEntropyLoss)
+    scheduler: PackagePath | None = None # serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR)
+    scheduler_max_t: int = 40
+    scheduler_min_lr: float = 1e-6
+    backbone_lr_factor: float = 1
+    n_classes: int = 2
+    class_weights: list[float] | None = None
+    learning_rate: float = 5e-5
+    weight_decay: float | None = 1e-6
 
 
 class BaseClassifierModel(L.LightningModule):
@@ -165,17 +165,3 @@ class BaseClassifierModel(L.LightningModule):
             return ([optimizer], [scheduler])
 
         return optimizer
-
-
-BaseClassifierModel.DEFAULT_CONFIG = BaseClassifierModelConfig(
-    optimizer=serialize_class(AdamW),
-    loss_fn=serialize_class(nn.CrossEntropyLoss),
-    scheduler=serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR),
-    scheduler_max_t=40,
-    scheduler_min_lr=1e-6,
-    backbone_lr_factor=1,
-    n_classes=2,
-    class_weights=None,
-    learning_rate=5e-5,
-    weight_decay=1e-6,
-)

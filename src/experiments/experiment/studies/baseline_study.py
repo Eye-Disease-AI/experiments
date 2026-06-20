@@ -23,14 +23,22 @@ from experiments.experiment.studies.study import Study, StudyConfig
 
 @dataclass(frozen=True, kw_only=True)
 class BaselineStudyConfig(StudyConfig):
-    max_epochs: int
-    datamodule_config: DataModuleConfig
-    model_config: BaseClassifierModelConfig
-    early_stopping_patience: int
-    backbone_unfreeze_patience: int
-    backbone_unfreeze_epochs: int
-    use_early_stopping: bool
-    use_freezing: bool
+    max_epochs: int = 100
+    datamodule_config: DataModuleConfig=NuclearCataractDataModuleConfig(
+        batch_size=64,
+        return_paths=False,
+        cache=True,
+        hard_policy=HardPolicy.PASSTHROUGH,
+        image_size=224,
+        normalize=True,
+        augment_rot_angle=15,
+    ),
+    model_config: BaseClassifierModelConfig = ConvNext.DEFAULT_CONFIG
+    early_stopping_patience: int = 5
+    backbone_unfreeze_patience: int = None
+    backbone_unfreeze_epochs: int = 5
+    use_early_stopping: bool = True
+    use_freezing: bool = False
 
     @override
     @staticmethod
@@ -125,24 +133,3 @@ class BaselineStudy(Study):
         model = model_config.build()
         trainer = self.create_trainer(params, run, optuna_callback)
         trainer.fit(model, datamodule=self._datamodule)
-
-
-BaselineStudy.DEFAULT_CONFIG = BaselineStudyConfig(
-    **vars(Study.DEFAULT_CONFIG),
-    max_epochs=100,
-    datamodule_config=NuclearCataractDataModuleConfig(
-        batch_size=64,
-        return_paths=False,
-        cache=True,
-        hard_policy=HardPolicy.PASSTHROUGH,
-        image_size=224,
-        normalize=True,
-        augment_rot_angle=15,
-    ),
-    model_config=ConvNext.DEFAULT_CONFIG,
-    early_stopping_patience=5,
-    backbone_unfreeze_patience=None,
-    backbone_unfreeze_epochs=5,
-    use_early_stopping=True,
-    use_freezing=False,
-)

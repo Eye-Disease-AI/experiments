@@ -14,16 +14,15 @@ from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.config_serializing import ClassConfig
 
-
 @dataclass(frozen=True, kw_only=True)
 class StudyConfig(ClassConfig):
     experiment_name: str | None = None
-    seed: int
-    max_trials: int
-    log_every_n_epochs: int
-    optuna_metric: str
-    optuna_direction: str
-    gpu_precision: str
+    seed: int = 2137
+    max_trials: int = 100
+    log_every_n_epochs: int = 1
+    optuna_metric: str = "val_auroc"
+    optuna_direction: str = "max"
+    gpu_precision: str = "bf16-mixed"
 
     @override
     def post_init_checks(self):
@@ -161,13 +160,3 @@ class Study(ABC):
             return optuna_study, parent_run, True
 
         return optuna_study, parent_run, False
-
-
-Study.DEFAULT_CONFIG = StudyConfig(
-    seed=2137,
-    max_trials=100,
-    log_every_n_epochs=1,
-    optuna_metric="val_auroc",
-    optuna_direction="max",
-    gpu_precision="bf16-mixed",
-)

@@ -13,7 +13,7 @@ from experiments.experiment.models.base_classifier import (
 
 @dataclass(frozen=True, kw_only=True)
 class ConvNextConfig(BaseClassifierModelConfig):
-    dropout: float
+    dropout: float = 0.2
 
     @staticmethod
     @override
@@ -22,8 +22,6 @@ class ConvNextConfig(BaseClassifierModelConfig):
 
 
 class ConvNext(BaseClassifierModel):
-    DEFAULT_CONFIG: ConvNextConfig
-
     def __init__(
         self,
         config: ConvNextConfig,
@@ -41,8 +39,3 @@ class ConvNext(BaseClassifierModel):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
-
-
-ConvNext.DEFAULT_CONFIG = ConvNextConfig(
-    **vars(BaseClassifierModel.DEFAULT_CONFIG), dropout=0.2
-)

@@ -15,7 +15,6 @@ STUDIES: list[StudyConfig] = [
         datamodule_config=replace(
             BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.DOMINATE,
-            cache=False,
         ),
     ),
     replace(
@@ -24,7 +23,6 @@ STUDIES: list[StudyConfig] = [
         datamodule_config=replace(
             BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.NO_HARD,
-            cache=False,
         ),
     ),
     replace(
@@ -33,7 +31,6 @@ STUDIES: list[StudyConfig] = [
         datamodule_config=replace(
             BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.ONLY_HARD,
-            cache=False,
         ),
     ),
     replace(
@@ -42,7 +39,6 @@ STUDIES: list[StudyConfig] = [
         datamodule_config=replace(
             BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.PASSTHROUGH,
-            cache=False,
         ),
     ),
 ]
