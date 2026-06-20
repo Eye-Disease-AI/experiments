@@ -9,7 +9,6 @@ from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
 from experiments.experiment import common_config
-from experiments.lib.reproducibility import global_seed_rng
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 
 data_path = "data"
@@ -27,19 +26,24 @@ DATASET_PATH = os.path.join(data_path, dataset_name)
 
 @dataclass(frozen=True, kw_only=True)
 class NuclearCataractDataModuleConfig(DataModuleConfig):
-    name: str = "DefaultNuclearCataractDatamodule"
-    seed: int
     batch_size: int
     return_paths: bool
     cache: bool
     hard_policy: HardPolicyType
     image_size: int
     normalize: bool
-    normalize_std: list[float]
-    normalize_mean: list[float]
+    augment_rot_angle: float
+
+    @staticmethod
+    @override
+    def get_configured_class():
+        return NuclearCataractDataModule
 
 
 class NuclearCataractDataModule(DataModule):
+    DATASET_STD: list[float] = [0.229015, 0.1663, 0.106812]
+    DATASET_MEAN: list[float] = [0.281245, 0.243682, 0.220464]
+
     def __init__(
         self,
         config: NuclearCataractDataModuleConfig,
@@ -91,9 +95,7 @@ class NuclearCataractDataModule(DataModule):
         ]
         if self._config.normalize:
             train_transforms.append(
-                transformsv2.Normalize(
-                    mean=self._config.normalize_mean, std=self._config.normalize_std
-                )
+                transformsv2.Normalize(mean=self.DATASET_MEAN, std=self.DATASET_STD)
             )
         self.transform = transformsv2.Compose(train_transforms)
 
@@ -103,9 +105,7 @@ class NuclearCataractDataModule(DataModule):
         ]
         if self._config.normalize:
             val_transforms.append(
-                transformsv2.Normalize(
-                    mean=self._config.normalize_mean, std=self._config.normalize_std
-                )
+                transformsv2.Normalize(mean=self.DATASET_MEAN, std=self.DATASET_STD)
             )
         self.val_transform = transformsv2.Compose(val_transforms)
 
@@ -185,22 +185,20 @@ class _SubsetTransformer(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
+    from experiments.lib.reproducibility import global_seed_rng
     import matplotlib.pyplot as plt
 
-    seed = common_config.SEED
+    seed = 2137
     global_seed_rng(seed)
 
     datamodule = NuclearCataractDataModule(
         NuclearCataractDataModuleConfig(
-            seed,
             batch_size=16,
             return_paths=True,
             cache=False,
             hard_policy=HardPolicy.PASSTHROUGH,
             image_size=224,
             normalize=common_config.NORMALIZE,
-            normalize_std=common_config.NORMALIZE_STD,
-            normalize_mean=common_config.NORMALIZE_MEAN,
         )
     )
     datamodule.prepare_data()

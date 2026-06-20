@@ -1,9 +1,8 @@
-from experiments.cmd.run_configs import DEFAULT_CONVNEXT_CONFIG
 from experiments.experiment import common_config
 from experiments.experiment.datamodules import init_datamodule
 from experiments.experiment.models.convnext import ConvNext
 from experiments.experiment.run_study import run_study
-from experiments.experiment.studies.convnext_study import ConvNextStudy
+from experiments.experiment.studies.baseline_study import BaselineStudy
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.reproducibility import global_seed_rng, get_git_sha
 
@@ -11,11 +10,12 @@ SHA = get_git_sha()
 
 MODELS = [(ConvNext, f"{common_config.EXPERIMENT_NAME}/convnext-search_{SHA}")]
 
+
 def main():
     global_seed_rng(common_config.SEED)
     exp = Experiment(common_config.EXPERIMENT_NAME)
 
-    datamodule = init_datamodule(ConvNextStudy.default_config)
+    datamodule = init_datamodule(BaselineStudy.default_config)
     datamodule.prepare_data()
 
     for ModelClass, study_name in MODELS:

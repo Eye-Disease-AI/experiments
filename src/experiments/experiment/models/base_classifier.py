@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+from importlib.metadata import PackagePath
 import os
 import tempfile
 
@@ -8,6 +10,7 @@ import pandas as pd
 import seaborn as sns
 import torch
 import torch.nn as nn
+from torch.optim import AdamW
 from torchmetrics import MetricCollection
 from torchmetrics.classification import (
     MulticlassAUROC,
@@ -17,28 +20,50 @@ from torchmetrics.classification import (
     MulticlassRecall,
 )
 
+from experiments.lib.config_serializing import (
+    ClassConfig,
+    deserialize_class,
+    serialize_class,
+)
 
-from experiments.experiment import common_config
+
+@dataclass(frozen=True, kw_only=True)
+class BaseClassifierModelConfig(ClassConfig):
+    optimizer: PackagePath
+    loss_fn: PackagePath
+    scheduler: PackagePath | None
+    scheduler_max_t: int
+    scheduler_min_lr: float
+    backbone_lr_factor: float
+    n_classes: int
+    class_weights: list[float] | None
+    learning_rate: float
+    weight_decay: float | None
 
 
-class ModelBase(L.LightningModule):
-    def __init__(self, n_classes: int, class_weights: torch.Tensor | None = None):
+class BaseClassifierModel(L.LightningModule):
+    DEFAULT_CONFIG: BaseClassifierModelConfig
+
+    def __init__(self, config: BaseClassifierModelConfig):
         super().__init__()
-        if common_config.CLASS_WEIGHTS:
-            self.class_weights = class_weights
-        else:
-            self.class_weights = None
-
-        self.loss_fn = nn.CrossEntropyLoss(weight=self.class_weights)
-        self._n_classes = n_classes
+        self.config = config
+        self.loss_fn = deserialize_class(self.config.loss_fn)(self.config.class_weights)
+        self.optimizer = deserialize_class(self.config.optimizer)
+        self.scheduler = deserialize_class(self.config.scheduler)
         self.val_metrics = MetricCollection(
             {
                 "val_precision": MulticlassPrecision(
-                    num_classes=n_classes, average="macro"
+                    num_classes=self.config.n_classes, average="macro"
                 ),
-                "val_recall": MulticlassRecall(num_classes=n_classes, average="macro"),
-                "val_auroc": MulticlassAUROC(num_classes=n_classes, average="macro"),
-                "val_f1": MulticlassF1Score(num_classes=n_classes, average="macro"),
+                "val_recall": MulticlassRecall(
+                    num_classes=self.config.n_classes, average="macro"
+                ),
+                "val_auroc": MulticlassAUROC(
+                    num_classes=self.config.n_classes, average="macro"
+                ),
+                "val_f1": MulticlassF1Score(
+                    num_classes=self.config.n_classes, average="macro"
+                ),
             }
         )
         self._val_probs: list[torch.Tensor] = []
@@ -78,9 +103,13 @@ class ModelBase(L.LightningModule):
         all_probs = self._last_all_probs.to(self.device)
         all_targets = self._last_all_targets.to(self.device)
 
-        cm = MulticlassConfusionMatrix(num_classes=self._n_classes).to(self.device)
+        cm = MulticlassConfusionMatrix(num_classes=self.config.n_classes).to(
+            self.device
+        )
         cm_matrix = cm(all_probs, all_targets).cpu().numpy()
-        fig, ax = plt.subplots(figsize=(self._n_classes * 2, self._n_classes * 2))
+        fig, ax = plt.subplots(
+            figsize=(self.config.n_classes * 2, self.config.n_classes * 2)
+        )
         sns.heatmap(cm_matrix, annot=True, fmt="d", ax=ax, cmap="Blues")
         ax.set_xlabel("Predicted")
         ax.set_ylabel("True")
@@ -115,24 +144,38 @@ class ModelBase(L.LightningModule):
         backbone_ids = {id(p) for m in self.backbone_modules() for p in m.parameters()}
         backbone_params = [p for p in self.parameters() if id(p) in backbone_ids]
         head_params = [p for p in self.parameters() if id(p) not in backbone_ids]
-        optimizer = common_config.OPTIMIZER(
+        optimizer = self.optimizer(
             [
-                {"params": head_params, "lr": self.hparams.lr},  # pyright: ignore
+                {"params": head_params, "lr": self.config.learning_rate},
                 {
                     "params": backbone_params,
-                    "lr": self.hparams.lr * common_config.BACKBONE_LR_FACTOR,
-                },  # pyright: ignore
+                    "lr": self.config.learning_rate * self.config.backbone_lr_factor,
+                },
             ],
-            weight_decay=self.hparams.weight_decay,  # type: ignore
+            weight_decay=self.config.weight_decay,
             amsgrad=True,
-        )  # pyright: ignore
+        )
 
-        if common_config.USE_SCHEDULER:
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        if self.scheduler:
+            scheduler = self.scheduler(
                 optimizer,
-                eta_min=common_config.SCHEDULER_MIN_LR,
-                T_max=common_config.SCHEDULER_MAX_T,
+                eta_min=self.config.scheduler_min_lr,
+                T_max=self.config.scheduler_max_t,
             )
             return ([optimizer], [scheduler])
 
         return optimizer
+
+
+BaseClassifierModel.DEFAULT_CONFIG = BaseClassifierModelConfig(
+    optimizer=serialize_class(AdamW),
+    loss_fn=serialize_class(nn.CrossEntropyLoss),
+    scheduler=serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR),
+    scheduler_max_t=40,
+    scheduler_min_lr=1e-6,
+    backbone_lr_factor=1,
+    n_classes=2,
+    class_weights=None,
+    learning_rate=5e-5,
+    weight_decay=1e-6,
+)

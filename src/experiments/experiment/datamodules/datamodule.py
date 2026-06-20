@@ -2,14 +2,13 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass
 import lightning as L
 from torch.utils.data.dataloader import DataLoader
-from ._names import DataModuleType
+
+from experiments.lib.config_serializing import ClassConfig
 
 
 @dataclass(frozen=True, kw_only=True)
-class DataModuleConfig:
+class DataModuleConfig(ClassConfig):
     batch_size: int
-    # name of the datamodule used for serializing its type to allow reconstruction
-    name: DataModuleType
 
 
 class DataModule(ABC, L.LightningDataModule):

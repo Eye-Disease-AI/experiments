@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
-
-from experiments.experiment import common_config
+from typing import Any, override
 
 from experiments.experiment.datamodules.datamodule import DataModule
 import mlflow
@@ -12,23 +10,25 @@ from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
 from experiments.experiment.objective import OptunaMLflowCallback
-from experiments.experiment.studies._serializing import (
-    flatten_dict,
-    study_config_to_dict,
-)
 from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
+from experiments.lib.config_serializing import ClassConfig
 
 
 @dataclass(frozen=True, kw_only=True)
-class StudyConfig:
-    name: str
-    experiment_name: str
+class StudyConfig(ClassConfig):
+    experiment_name: str | None = None
     seed: int
     max_trials: int
     log_every_n_epochs: int
-    optuna_direction: str
     optuna_metric: str
+    optuna_direction: str
+    gpu_precision: str
+
+    @override
+    def post_init_checks(self):
+        if not self.experiment_name:
+            raise Exception(f"experiment_name is {self.experiment_name}")
 
 
 class Study(ABC):
@@ -40,7 +40,6 @@ class Study(ABC):
     ) -> None:
         self._config = config
         self.name = f"{config.experiment_name}_{get_git_sha()}"
-        self.seed = common_config.SEED
 
     @abstractmethod
     def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]: ...
@@ -152,7 +151,7 @@ class Study(ABC):
             parent_run = mlflow.start_run(run_name=actual_study_name)
             optuna_study.set_user_attr("mlflow_parent_run_id", parent_run.info.run_id)
             mlflow.set_tag("optuna_study", actual_study_name)
-            mlflow.log_params(flatten_dict(study_config_to_dict(self._config)))
+            mlflow.log_params(self._config.serialize_config())
 
         if n_finished >= max_trials:
             print(
@@ -162,3 +161,13 @@ class Study(ABC):
             return optuna_study, parent_run, True
 
         return optuna_study, parent_run, False
+
+
+Study.DEFAULT_CONFIG = StudyConfig(
+    seed=2137,
+    max_trials=100,
+    log_every_n_epochs=1,
+    optuna_metric="val_auroc",
+    optuna_direction="max",
+    gpu_precision="bf16-mixed",
+)

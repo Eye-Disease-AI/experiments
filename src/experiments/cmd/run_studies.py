@@ -1,52 +1,56 @@
 from dataclasses import replace
 
-from experiments.experiment.studies import init_study
-from experiments.experiment.studies._serializing import flatten_dict, study_config_to_dict
 from experiments.experiment.studies.study import StudyConfig
 import torch
 
 from dataset.hard_policy import HardPolicy
-from experiments.experiment.studies.convnext_study import ConvNextStudy
+from experiments.experiment.studies.baseline_study import BaselineStudy
+
+EXPERIMENT_NAME = "baseline-hard-policy-test"
 
 STUDIES: list[StudyConfig] = [
     replace(
-        ConvNextStudy.DEFAULT_CONFIG,
-        experiment_name=ConvNextStudy.DEFAULT_CONFIG.experiment_name + "_dominate",
+        BaselineStudy.DEFAULT_CONFIG,
+        experiment_name=EXPERIMENT_NAME + "_dominate",
         datamodule_config=replace(
-            ConvNextStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.DOMINATE,
+            cache=False,
         ),
     ),
     replace(
-        ConvNextStudy.DEFAULT_CONFIG,
-        experiment_name=ConvNextStudy.DEFAULT_CONFIG.experiment_name + "_no_hard",
+        BaselineStudy.DEFAULT_CONFIG,
+        experiment_name=EXPERIMENT_NAME + "_no_hard",
         datamodule_config=replace(
-            ConvNextStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.NO_HARD,
+            cache=False,
         ),
     ),
     replace(
-        ConvNextStudy.DEFAULT_CONFIG,
-        experiment_name=ConvNextStudy.DEFAULT_CONFIG.experiment_name + "_only_hard",
+        BaselineStudy.DEFAULT_CONFIG,
+        experiment_name=EXPERIMENT_NAME + "_only_hard",
         datamodule_config=replace(
-            ConvNextStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.ONLY_HARD,
+            cache=False,
         ),
     ),
     replace(
-        ConvNextStudy.DEFAULT_CONFIG,
-        experiment_name=ConvNextStudy.DEFAULT_CONFIG.experiment_name + "_passthrough",
+        BaselineStudy.DEFAULT_CONFIG,
+        experiment_name=EXPERIMENT_NAME + "_passthrough",
         datamodule_config=replace(
-            ConvNextStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
             hard_policy=HardPolicy.PASSTHROUGH,
+            cache=False,
         ),
     ),
 ]
 
-torch.set_float32_matmul_precision("medium")  # to use tensor cores on newer gpus
+torch.set_float32_matmul_precision("high")
 
 for study_config in STUDIES:
-    study = init_study(study_config)
+    study = study_config.build()
     print(f"\n{'=' * 60}")
     print(f"Study: {study.name}")
     print(f"{'=' * 60}\n")

@@ -1,25 +1,39 @@
+from dataclasses import dataclass
+from typing import override
+
 import torch
 import torch.nn as nn
 import torchvision
 
-from experiments.experiment.models.base import ModelBase
+from experiments.experiment.models.base_classifier import (
+    BaseClassifierModel,
+    BaseClassifierModelConfig,
+)
 
 
-class ConvNext(ModelBase):
+@dataclass(frozen=True, kw_only=True)
+class ConvNextConfig(BaseClassifierModelConfig):
+    dropout: float
+
+    @staticmethod
+    @override
+    def get_configured_class():
+        return ConvNext
+
+
+class ConvNext(BaseClassifierModel):
+    DEFAULT_CONFIG: ConvNextConfig
+
     def __init__(
         self,
-        n_classes: int,
-        lr: float = 1e-3,
-        weight_decay: float = 1e-4,
-        dropout: float = 0.2,
-        class_weights: torch.Tensor | None = None,
+        config: ConvNextConfig,
     ):
-        super().__init__(n_classes, class_weights=class_weights)
+        super().__init__(config)
         self.save_hyperparameters()
         self.model = torchvision.models.convnext_tiny(weights="IMAGENET1K_V1")
         new_clf = list(self.model.classifier.children())[:-1]
-        new_clf.append(nn.LazyLinear(n_classes))
-        new_clf.append(nn.Dropout(dropout))
+        new_clf.append(nn.LazyLinear(config.n_classes))
+        new_clf.append(nn.Dropout(config.dropout))
         self.model.classifier = nn.Sequential(*new_clf)
 
     def backbone_modules(self) -> list[nn.Module]:
@@ -27,3 +41,8 @@ class ConvNext(ModelBase):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
+
+
+ConvNext.DEFAULT_CONFIG = ConvNextConfig(
+    **vars(BaseClassifierModel.DEFAULT_CONFIG), dropout=0.2
+)

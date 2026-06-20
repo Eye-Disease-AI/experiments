@@ -1,6 +1,6 @@
 import time
 
-from experiments.experiment.datamodules.default_nuclear_cataract import DataModule
+from experiments.experiment.datamodules.nuclear_cataract_datamodule import DataModule
 import lightning as L
 import mlflow
 import optuna

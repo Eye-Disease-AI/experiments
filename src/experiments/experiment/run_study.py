@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import mlflow
 import optuna
 from experiments.experiment.datamodules.datamodule import DataModule
-from experiments.experiment.datamodules.datamodule import DataModule
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 from optuna.visualization.matplotlib import (

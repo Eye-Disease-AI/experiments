@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, replace
+from typing import Literal, override
 
 from dataset.hard_policy import HardPolicy
 import lightning as L
@@ -8,42 +8,48 @@ import optuna
 from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers import MLFlowLogger
 
-from experiments.experiment import common_config
-from experiments.experiment.datamodules import init_datamodule
-from experiments.experiment.datamodules.default_nuclear_cataract import (
+from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
+from experiments.experiment.models.base_classifier import BaseClassifierModelConfig
+from experiments.experiment.models.convnext import ConvNext
 from experiments.experiment.objective import (
     BackboneFreezeCallback,
     OptunaMLflowCallback,
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
-from experiments.experiment.models.convnext import ConvNext
 from experiments.experiment.studies.study import Study, StudyConfig
 
 
 @dataclass(frozen=True, kw_only=True)
-class ConvNextStudyConfig(StudyConfig):
-    name: str = "ConvnextStudy"
+class BaselineStudyConfig(StudyConfig):
     max_epochs: int
     datamodule_config: DataModuleConfig
+    model_config: BaseClassifierModelConfig
     early_stopping_patience: int
     backbone_unfreeze_patience: int
+    backbone_unfreeze_epochs: int
     use_early_stopping: bool
     use_freezing: bool
+
+    @override
+    @staticmethod
+    def get_configured_class():
+        return BaselineStudy
 
 
 _OptunaParams = Literal["lr", "weight_decay", "dropout", "batch_size"]
 
 
-class ConvNextStudy(Study):
+class BaselineStudy(Study):
+    DEFAULT_CONFIG: BaselineStudyConfig
+
     def __init__(
         self,
-        config: ConvNextStudyConfig,
+        config: BaselineStudyConfig,
     ):
         super().__init__(config)
         self._config = config
-        self._datamodule = init_datamodule(self._config.datamodule_config)
 
     def _suggest_params(self, trial: optuna.Trial) -> dict[_OptunaParams]:
         d: dict[_OptunaParams] = {
@@ -55,7 +61,7 @@ class ConvNextStudy(Study):
         return d
 
     def _init_datamodules(self) -> list[DataModule]:
-        self._datamodule = init_datamodule(self._config.datamodule_config)
+        self._datamodule = self._config.datamodule_config.build()
         return [self._datamodule]
 
     def _configure_datamodules(self, params: dict[_OptunaParams]) -> None:
@@ -63,19 +69,10 @@ class ConvNextStudy(Study):
         # I would say it is better to manually create dataset and reuse it to create dataloaders.
         # In other words: just pass dataset to the datamodule class, so it will reuse caches.
         self._datamodule.batch_size = params["batch_size"]
-        pass
 
-    def _train(
+    def create_trainer(
         self, params: dict, run: mlflow.ActiveRun, optuna_callback: OptunaMLflowCallback
-    ) -> None:
-        model = ConvNext(
-            n_classes=self._datamodule.n_classes,
-            lr=params["lr"],
-            weight_decay=params["weight_decay"],
-            dropout=params["dropout"],
-            class_weights=self._datamodule.train_class_weights,
-        )
-
+    ):
         callbacks: list[L.Callback] = [optuna_callback]
 
         mlf_logger = MLFlowLogger(
@@ -98,11 +95,12 @@ class ConvNextStudy(Study):
                 BackboneFreezeCallback(
                     monitor="val_loss",
                     patience=self._config.backbone_unfreeze_patience,
-                    mode="min",
+                    direction="min",
+                    after_epochs=self._config.backbone_unfreeze_epochs,
                 )
             )
 
-        trainer = L.Trainer(
+        return L.Trainer(
             max_epochs=self._config.max_epochs,
             accelerator="auto",
             logger=mlf_logger,
@@ -111,33 +109,40 @@ class ConvNextStudy(Study):
             enable_model_summary=False,
             enable_checkpointing=False,
             log_every_n_steps=1,
-            precision="bf16-mixed",
+            precision=self._config.gpu_precision,
             deterministic=True,
         )
 
+    def _train(
+        self, params: dict, run: mlflow.ActiveRun, optuna_callback: OptunaMLflowCallback
+    ) -> None:
+        model_config = replace(
+            self._config.model_config,
+            learning_rate=params["lr"],
+            weight_decay=params["weight_decay"],
+            dropout=params["dropout"],
+        )
+        model = model_config.build()
+        trainer = self.create_trainer(params, run, optuna_callback)
         trainer.fit(model, datamodule=self._datamodule)
 
-    DEFAULT_CONFIG = ConvNextStudyConfig(
-        experiment_name=common_config.EXPERIMENT_NAME,
-        seed=common_config.SEED,
-        max_trials=common_config.MAX_TRIALS,
-        log_every_n_epochs=common_config.LOG_EVERY_N_EPOCHS,
-        optuna_direction=common_config.OPTUNA_DIRECTION,
-        optuna_metric=common_config.OPTUNA_METRIC,
-        max_epochs=common_config.EPOCHS,
-        datamodule_config=NuclearCataractDataModuleConfig(
-            seed=common_config.SEED,
-            batch_size=32,
-            return_paths=False,
-            cache=common_config.CACHE_SIZE is not None,
-            hard_policy=HardPolicy.PASSTHROUGH,
-            image_size=common_config.CACHE_SIZE,
-            normalize=common_config.NORMALIZE,
-            normalize_std=common_config.NORMALIZE_STD,
-            normalize_mean=common_config.NORMALIZE_MEAN,
-        ),
-        early_stopping_patience=5,
-        backbone_unfreeze_patience=5,
-        use_early_stopping=True,
-        use_freezing=False,
-    )
+
+BaselineStudy.DEFAULT_CONFIG = BaselineStudyConfig(
+    **vars(Study.DEFAULT_CONFIG),
+    max_epochs=100,
+    datamodule_config=NuclearCataractDataModuleConfig(
+        batch_size=64,
+        return_paths=False,
+        cache=True,
+        hard_policy=HardPolicy.PASSTHROUGH,
+        image_size=224,
+        normalize=True,
+        augment_rot_angle=15,
+    ),
+    model_config=ConvNext.DEFAULT_CONFIG,
+    early_stopping_patience=5,
+    backbone_unfreeze_patience=None,
+    backbone_unfreeze_epochs=5,
+    use_early_stopping=True,
+    use_freezing=False,
+)

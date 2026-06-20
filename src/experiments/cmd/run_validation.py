@@ -11,7 +11,10 @@ import optuna
 from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
 from experiments.experiment.best_snapshot import BestSnapshotCallback
 from experiments.experiment import common_config
-from experiments.experiment.datamodules.default_nuclear_cataract import _SubsetTransformer, NuclearCataractDataModule
+from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
+    _SubsetTransformer,
+    NuclearCataractDataModule,
+)
 from experiments.experiment.objective import create_trainer
 from experiments.experiment.run_study import CONFIG_PARAMS
 from experiments.lib.mlflow_setup import Experiment
@@ -55,7 +58,9 @@ def coerce_config(current, v):
 
 
 def datamodule_change_subsets(
-    dm: NuclearCataractDataModule, train_sub: NuclearCataractSubset, val_sub: NuclearCataractSubset
+    dm: NuclearCataractDataModule,
+    train_sub: NuclearCataractSubset,
+    val_sub: NuclearCataractSubset,
 ):
     dm.train_set = _SubsetTransformer(train_sub, transform=dm.transform)
     dm.val_set = _SubsetTransformer(val_sub, transform=dm.val_transform)
