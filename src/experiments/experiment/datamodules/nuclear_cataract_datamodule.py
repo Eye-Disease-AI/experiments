@@ -8,7 +8,6 @@ import torch
 from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
-from experiments.experiment import common_config
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 
 data_path = "data"
@@ -26,13 +25,13 @@ DATASET_PATH = os.path.join(data_path, dataset_name)
 
 @dataclass(frozen=True, kw_only=True)
 class NuclearCataractDataModuleConfig(DataModuleConfig):
-    batch_size: int
-    return_paths: bool
-    cache: bool
-    hard_policy: HardPolicyType
-    image_size: int
-    normalize: bool
-    augment_rot_angle: float
+    batch_size: int = 64
+    return_paths: bool = False
+    cache: bool = True
+    hard_policy: HardPolicyType = HardPolicy.PASSTHROUGH
+    image_size: int = 224
+    normalize: bool = False
+    augment_rot_angle: float = 15
 
     @staticmethod
     @override
@@ -60,7 +59,7 @@ class NuclearCataractDataModule(DataModule):
 
     @override
     def setup(self, stage: str | None = None):
-        max_angle = 15
+        max_angle = self._config.augment_rot_angle
         max_rad = math.radians(max_angle)
         pre_rot_size = int(
             math.ceil(self._config.image_size * (math.sin(max_rad) + math.cos(max_rad)))
@@ -89,7 +88,7 @@ class NuclearCataractDataModule(DataModule):
                 )
             ),
             transformsv2.RandomHorizontalFlip(0.5),
-            transformsv2.RandomRotation(15),  # type: ignore
+            transformsv2.RandomRotation(self._config.augment_rot_angle),
             transformsv2.Resize((self._config.image_size, self._config.image_size)),
             transformsv2.ConvertImageDtype(),
         ]
@@ -120,7 +119,7 @@ class NuclearCataractDataModule(DataModule):
             self.test_set = _SubsetTransformer(test, transform=self.val_transform)
 
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=self._config.batch_size, num_workers=0, pin_memory=True
+            dataset, batch_size=self._batch_size, pin_memory=True
         )
 
     @override
@@ -198,7 +197,8 @@ if __name__ == "__main__":
             cache=False,
             hard_policy=HardPolicy.PASSTHROUGH,
             image_size=224,
-            normalize=common_config.NORMALIZE,
+            normalize=False,
+            augment_rot_angle=15,
         )
     )
     datamodule.prepare_data()
@@ -239,7 +239,7 @@ if __name__ == "__main__":
     channel_sum = torch.zeros(3, dtype=torch.float64)
     channel_sum_sq = torch.zeros(3, dtype=torch.float64)
     n_pixels = 0
-    for img, _ in all_splits:  # pyright: ignore
+    for img, _ in all_splits:
         img = img.double() / 255.0 if img.dtype == torch.uint8 else img.double()
         c, h, w = img.shape
         channel_sum += img.sum(dim=[1, 2])

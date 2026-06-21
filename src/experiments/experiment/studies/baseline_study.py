@@ -12,8 +12,8 @@ from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
 from experiments.experiment.models.base_classifier import BaseClassifierModelConfig
-from experiments.experiment.models.convnext import ConvNext
-from experiments.experiment.objective import (
+from experiments.experiment.models.convnext import ConvNextConfig
+from experiments.experiment.callbacks import (
     BackboneFreezeCallback,
     OptunaMLflowCallback,
 )
@@ -24,16 +24,18 @@ from experiments.experiment.studies.study import Study, StudyConfig
 @dataclass(frozen=True, kw_only=True)
 class BaselineStudyConfig(StudyConfig):
     max_epochs: int = 100
-    datamodule_config: DataModuleConfig=NuclearCataractDataModuleConfig(
-        batch_size=64,
-        return_paths=False,
-        cache=True,
-        hard_policy=HardPolicy.PASSTHROUGH,
-        image_size=224,
-        normalize=True,
-        augment_rot_angle=15,
-    ),
-    model_config: BaseClassifierModelConfig = ConvNext.DEFAULT_CONFIG
+    datamodule_config: DataModuleConfig = (
+        NuclearCataractDataModuleConfig(
+            batch_size=64,
+            return_paths=False,
+            cache=True,
+            hard_policy=HardPolicy.PASSTHROUGH,
+            image_size=224,
+            normalize=True,
+            augment_rot_angle=15,
+        ),
+    )
+    model_config: BaseClassifierModelConfig = ConvNextConfig()
     early_stopping_patience: int = 5
     backbone_unfreeze_patience: int = None
     backbone_unfreeze_epochs: int = 5
@@ -50,8 +52,6 @@ _OptunaParams = Literal["lr", "weight_decay", "dropout", "batch_size"]
 
 
 class BaselineStudy(Study):
-    DEFAULT_CONFIG: BaselineStudyConfig
-
     def __init__(
         self,
         config: BaselineStudyConfig,

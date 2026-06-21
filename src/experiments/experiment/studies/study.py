@@ -9,7 +9,7 @@ from optuna import create_study
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
-from experiments.experiment.objective import OptunaMLflowCallback
+from experiments.experiment.callbacks import OptunaMLflowCallback
 from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.config_serializing import ClassConfig
@@ -31,8 +31,6 @@ class StudyConfig(ClassConfig):
 
 
 class Study(ABC):
-    DEFAULT_CONFIG: StudyConfig
-
     def __init__(
         self,
         config: StudyConfig,

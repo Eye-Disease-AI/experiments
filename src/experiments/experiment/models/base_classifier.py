@@ -42,8 +42,6 @@ class BaseClassifierModelConfig(ClassConfig):
 
 
 class BaseClassifierModel(L.LightningModule):
-    DEFAULT_CONFIG: BaseClassifierModelConfig
-
     def __init__(self, config: BaseClassifierModelConfig):
         super().__init__()
         self.config = config

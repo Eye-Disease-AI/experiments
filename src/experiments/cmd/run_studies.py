@@ -4,40 +4,40 @@ from experiments.experiment.studies.study import StudyConfig
 import torch
 
 from dataset.hard_policy import HardPolicy
-from experiments.experiment.studies.baseline_study import BaselineStudy
+from experiments.experiment.studies.baseline_study import BaselineStudyConfig
 
 EXPERIMENT_NAME = "baseline-hard-policy-test"
 
 STUDIES: list[StudyConfig] = [
     replace(
-        BaselineStudy.DEFAULT_CONFIG,
+        BaselineStudyConfig(),
         experiment_name=EXPERIMENT_NAME + "_dominate",
         datamodule_config=replace(
-            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudyConfig().datamodule_config,
             hard_policy=HardPolicy.DOMINATE,
         ),
     ),
     replace(
-        BaselineStudy.DEFAULT_CONFIG,
+        BaselineStudyConfig(),
         experiment_name=EXPERIMENT_NAME + "_no_hard",
         datamodule_config=replace(
-            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudyConfig().datamodule_config,
             hard_policy=HardPolicy.NO_HARD,
         ),
     ),
     replace(
-        BaselineStudy.DEFAULT_CONFIG,
+        BaselineStudyConfig(),
         experiment_name=EXPERIMENT_NAME + "_only_hard",
         datamodule_config=replace(
-            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudyConfig().datamodule_config,
             hard_policy=HardPolicy.ONLY_HARD,
         ),
     ),
     replace(
-        BaselineStudy.DEFAULT_CONFIG,
+        BaselineStudyConfig(),
         experiment_name=EXPERIMENT_NAME + "_passthrough",
         datamodule_config=replace(
-            BaselineStudy.DEFAULT_CONFIG.datamodule_config,
+            BaselineStudyConfig().datamodule_config,
             hard_policy=HardPolicy.PASSTHROUGH,
         ),
     ),

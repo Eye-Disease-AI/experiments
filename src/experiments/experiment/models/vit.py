@@ -13,7 +13,7 @@ from experiments.experiment.models.base_classifier import (
 
 @dataclass(frozen=True, kw_only=True)
 class ViTConfig(BaseClassifierModelConfig):
-    dropout: float
+    dropout: float = 0.2
 
     @staticmethod
     @override
@@ -22,8 +22,6 @@ class ViTConfig(BaseClassifierModelConfig):
 
 
 class ViT(BaseClassifierModel):
-    DEFAULT_CONFIG: ViTConfig
-
     def __init__(
         self,
         config: ViTConfig,
@@ -42,6 +40,3 @@ class ViT(BaseClassifierModel):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
-
-
-ViT.DEFAULT_CONFIG = ViTConfig(**vars(BaseClassifierModel.DEFAULT_CONFIG), dropout=0.2)

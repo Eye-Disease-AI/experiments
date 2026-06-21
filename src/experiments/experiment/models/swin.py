@@ -13,7 +13,7 @@ from experiments.experiment.models.base_classifier import (
 
 @dataclass(frozen=True, kw_only=True)
 class SwinConfig(BaseClassifierModelConfig):
-    dropout: float
+    dropout: float = 0.2
 
     @staticmethod
     @override
@@ -22,8 +22,6 @@ class SwinConfig(BaseClassifierModelConfig):
 
 
 class Swin(BaseClassifierModel):
-    DEFAULT_CONFIG: SwinConfig
-
     def __init__(
         self,
         config: SwinConfig,
@@ -42,8 +40,3 @@ class Swin(BaseClassifierModel):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
-
-
-Swin.DEFAULT_CONFIG = SwinConfig(
-    **vars(BaseClassifierModel.DEFAULT_CONFIG), dropout=0.2
-)
