@@ -37,8 +37,8 @@ class BaselineStudyConfig(StudyConfig):
     )
     model_config: BaseClassifierModelConfig = ConvNextConfig()
     early_stopping_patience: int = 5
-    backbone_unfreeze_patience: int = None
-    backbone_unfreeze_epochs: int = 5
+    backbone_unfreeze_mode: Literal["patience", "const_epochs"] = "const_epochs"
+    backbone_unfreeze_num_epochs: int = 5
     use_early_stopping: bool = True
     use_freezing: bool = False
 
@@ -102,9 +102,9 @@ class BaselineStudy(Study):
             callbacks.append(
                 BackboneFreezeCallback(
                     monitor="val_loss",
-                    patience=self._config.backbone_unfreeze_patience,
+                    mode=self._config.backbone_unfreeze_mode,
                     direction="min",
-                    after_epochs=self._config.backbone_unfreeze_epochs,
+                    num_epochs=self._config.backbone_unfreeze_num_epochs,
                 )
             )
 
