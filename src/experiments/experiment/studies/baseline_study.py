@@ -137,8 +137,12 @@ class BaselineStudy(Study):
 
     @override
     def _retrain(
-        self, best_params: dict, best_epoch: int, get_logger, callbacks: list = []
-    ):
+        self,
+        get_logger,
+        best_params: dict,
+        best_epoch: int,
+        callbacks: list = [],
+    ) -> tuple[L.Trainer, Any]:
         self._datamodule.batch_size = best_params["batch_size"]
         self._datamodule.setup(stage="fit")
         model_config = replace(

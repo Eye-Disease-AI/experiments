@@ -74,8 +74,8 @@ class Study(ABC):
         get_logger,
         best_params: dict,
         best_epoch: int,
-        callbacks,
-    ) -> tuple[L.Trainer, dict]: ...
+        callbacks: list,
+    ) -> tuple[L.Trainer, Any]: ...
 
     def run(self) -> tuple[Experiment, optuna.Study]:
         self._prepare_datamodules()
