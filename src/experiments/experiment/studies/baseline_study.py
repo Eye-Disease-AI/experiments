@@ -25,16 +25,14 @@ from experiments.lib.reproducibility import global_seed_rng
 @dataclass(frozen=True, kw_only=True)
 class BaselineStudyConfig(StudyConfig):
     max_epochs: int = 100
-    datamodule_config: DataModuleConfig = (
-        NuclearCataractDataModuleConfig(
-            batch_size=64,
-            return_paths=False,
-            cache=True,
-            hard_policy=HardPolicy.PASSTHROUGH,
-            image_size=224,
-            normalize=True,
-            augment_rot_angle=15,
-        ),
+    datamodule_config: DataModuleConfig = NuclearCataractDataModuleConfig(
+        batch_size=64,
+        return_paths=False,
+        cache=True,
+        hard_policy=HardPolicy.PASSTHROUGH,
+        image_size=224,
+        normalize=True,
+        augment_rot_angle=15,
     )
     model_config: BaseClassifierModelConfig = ConvNextConfig()
     early_stopping_patience: int = 5
@@ -173,8 +171,5 @@ class BaselineStudy(Study):
         trainer.fit(best_model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(best_model, datamodule=self._datamodule)
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
-        model_name = self._config.model_config.class_name()
-        mlflow.log_metric(
-            f"{model_name}-retrain_{self._config.optuna_metric}", retrain_metric
-        )
+        mlflow.log_metric(f"retrain_best_{self._config.optuna_metric}", retrain_metric)
         return trainer, validation_metrics

@@ -128,18 +128,20 @@ class Study(ABC):
         )
         mlflow.log_metric("best_epoch", best_epoch)
         try:
-            fig = plot_optimization_history(optuna_study)
-            mlflow.log_figure(fig.figure, "optimization_history.png")
-            plt.close(fig)
-        except Exception:
-            pass
+            figure = plot_optimization_history(optuna_study)
+            mlflow.log_figure(figure, "optimization_history.png")
+            plt.close()
+        except Exception as e:
+            print("WARN failed to log optimization_history")
+            print(e)
 
         try:
-            fig = plot_param_importances(optuna_study)
-            mlflow.log_figure(fig.figure, "param_importances.png")
-            plt.close(fig)
-        except Exception:
-            pass
+            figure = plot_param_importances(optuna_study)
+            mlflow.log_figure(figure, "param_importances.png")
+            plt.close()
+        except Exception as e:
+            print("WARN failed to log param_importances")
+            print(e)
 
         return best_trial, best_params, best_epoch
 
