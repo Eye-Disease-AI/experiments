@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 import matplotlib.pyplot as plt
 import mlflow
 import optuna

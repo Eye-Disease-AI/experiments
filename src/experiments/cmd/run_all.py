@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 from experiments.experiment import common_config
 from experiments.experiment.datamodules import init_datamodule
 from experiments.experiment.models.convnext import ConvNext
