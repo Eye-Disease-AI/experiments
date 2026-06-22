@@ -104,4 +104,9 @@ def serialize_class(cls) -> PackagePath | None:
     """object -> 'package.module.ClassName'"""
     if cls is None:
         return None
+    return must_serialize_class(cls)
+
+
+def must_serialize_class(cls) -> PackagePath:
+    assert cls is not None
     return PackagePath(cls.__module__, cls.__qualname__)

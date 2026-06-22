@@ -16,14 +16,14 @@ from torchmetrics.classification import (
 from experiments.lib.config_serializing import (
     ClassConfig,
     deserialize_class,
-    serialize_class,
+    must_serialize_class,
 )
 
 
 @dataclass(frozen=True, kw_only=True)
 class BaseClassifierModelConfig(ClassConfig):
-    optimizer: PackagePath = serialize_class(AdamW)
-    loss_fn: PackagePath = serialize_class(nn.CrossEntropyLoss)
+    optimizer: PackagePath = must_serialize_class(AdamW)
+    loss_fn: PackagePath = must_serialize_class(nn.CrossEntropyLoss)
     scheduler: PackagePath | None = (
         None  # serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR)
     )
