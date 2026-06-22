@@ -10,7 +10,6 @@ from lightning.pytorch.callbacks import EarlyStopping
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
-from experiments.experiment.models.base_classifier import BaseClassifierModelConfig
 from experiments.experiment.models.convnext import ConvNextConfig
 from experiments.experiment.callbacks import (
     BackboneFreezeCallback,
@@ -32,7 +31,7 @@ class BaselineStudyConfig(StudyConfig):
         normalize=True,
         augment_rot_angle=15,
     )
-    model_config: BaseClassifierModelConfig = ConvNextConfig()
+    model_config: ConvNextConfig = ConvNextConfig()
     early_stopping_patience: int = 5
     backbone_unfreeze_mode: Literal["patience", "const_epochs"] = "const_epochs"
     backbone_unfreeze_num_epochs: int = 5
