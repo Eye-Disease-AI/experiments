@@ -12,6 +12,10 @@ class ClassConfig(ABC):
     @staticmethod
     def get_configured_class(): ...
 
+    def class_name(self) -> str:
+        """Friendly class name without the whole path"""
+        return str(self.configured_class).split(".")[-1]
+
     def post_init_checks(self): ...
 
     def __post_init__(self):
@@ -21,6 +25,7 @@ class ClassConfig(ABC):
             serialize_class(self.get_configured_class()),
         )
 
+    @staticmethod
     def _config_to_dict(config):
         if is_dataclass(config):
             return {

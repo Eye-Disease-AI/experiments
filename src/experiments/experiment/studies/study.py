@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, override
-
+from typing import Any, Literal, override
+import lightning as L
+from matplotlib import pyplot as plt
+from optuna.visualization import plot_optimization_history, plot_param_importances
 from experiments.experiment.datamodules.datamodule import DataModule
 import mlflow
 import optuna
@@ -14,6 +16,7 @@ from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.config_serializing import ClassConfig
 
+
 @dataclass(frozen=True, kw_only=True)
 class StudyConfig(ClassConfig):
     experiment_name: str | None = None
@@ -21,8 +24,11 @@ class StudyConfig(ClassConfig):
     max_trials: int = 100
     log_every_n_epochs: int = 1
     optuna_metric: str = "val_auroc"
-    optuna_direction: str = "max"
+    optuna_direction: Literal["min", "max"] = "max"
     gpu_precision: str = "bf16-mixed"
+    retrain_best: bool = True
+    checkpoint_dir: str = "checkpoints"
+    device: Literal["auto", "gpu", "cpu"] = "auto"
 
     @override
     def post_init_checks(self):
@@ -56,25 +62,86 @@ class Study(ABC):
         optuna_callback: OptunaMLflowCallback,
     ) -> None: ...
 
-    def run(self) -> None:
-        self._prepare_datamodules()
-        optuna_study, _, already_complete = self._setup_optuna_study(
-            max_trials=self._config.max_trials
-        )
+    @abstractmethod
+    def _retrain(
+        self,
+        study_name: str,
+        best_params: dict,
+        best_epoch: int,
+        run: mlflow.ActiveRun,
+    ) -> tuple[L.Trainer, dict]: ...
 
-        if already_complete:
-            return
-        optuna_study.optimize(
-            self._objective,
-            n_trials=self._config.max_trials * 2,
-            callbacks=[
-                MaxTrialsCallback(
-                    self._config.max_trials,
-                    states=(TrialState.COMPLETE, TrialState.PRUNED),
-                )
-            ],
+    def run(self) -> tuple[Experiment, optuna.Study]:
+        self._prepare_datamodules()
+        mlflow_experiment, optuna_study, parent_run, already_complete = (
+            self._setup_optuna_study(max_trials=self._config.max_trials)
         )
-        mlflow.end_run()
+        if already_complete:
+            return mlflow_experiment, optuna_study
+        try:
+            optuna_study.optimize(
+                self._objective,
+                n_trials=self._config.max_trials * 2,
+                callbacks=[
+                    MaxTrialsCallback(
+                        self._config.max_trials,
+                        states=(TrialState.COMPLETE, TrialState.PRUNED),
+                    )
+                ],
+            )
+            if not any(
+                t for t in optuna_study.trials if t.state == TrialState.COMPLETE
+            ):
+                print("No completed trials. Skipping retrain and plots.")
+                return mlflow_experiment, optuna_study
+
+            _best_trial, best_params, best_epoch = self._parse_optuna_study(
+                optuna_study
+            )
+
+            if self._config.retrain_best:
+                print("\n#### Retraining\n")
+                trainer, metrics = self._retrain(
+                    best_params=best_params, best_epoch=best_epoch, run=parent_run
+                )
+                best_model_path = (
+                    f"checkpoints/{optuna_study.study_name}/best_retrain.ckpt"
+                )
+                trainer.save_checkpoint(best_model_path)
+                mlflow.log_artifact(best_model_path, artifact_path="model")
+
+        finally:
+            mlflow.end_run()
+        return mlflow_experiment, optuna_study
+
+    def _parse_optuna_study(self, optuna_study: optuna.Study):
+        best_trial = optuna_study.best_trial
+        best_params = optuna_study.best_params
+
+        mlflow.log_params(best_trial.params)
+        mlflow.log_metric(f"best_{self._config.optuna_metric}", best_trial.value)
+        mlflow.set_tag("best_trial_number", best_trial.number)
+        agg = min if self._config.optuna_direction == "min" else max
+        best_epoch = agg(
+            best_trial.intermediate_values,
+            key=best_trial.intermediate_values.get,
+        )
+        mlflow.log_metric("best_epoch", best_epoch)
+        try:
+            fig = plot_optimization_history(optuna_study)
+            mlflow.log_figure(fig.figure, "optimization_history.png")
+            plt.close(fig)
+        except Exception:
+            pass
+
+        try:
+            fig = plot_param_importances(optuna_study)
+            mlflow.log_figure(fig.figure, "param_importances.png")
+            plt.close(fig)
+        except Exception:
+            pass
+
+        return best_trial, best_params, best_epoch
 
     def _objective(self, trial: optuna.Trial) -> float:
         global_seed_rng(self._config.seed)
@@ -116,7 +183,7 @@ class Study(ABC):
 
     def _setup_optuna_study(
         self, max_trials: int, study_name: str | None = None
-    ) -> tuple[optuna.study.Study, mlflow.ActiveRun, bool]:
+    ) -> tuple[Experiment, optuna.study.Study, mlflow.ActiveRun, bool]:
         """Setup and return Optuna study with MLflow integration."""
         mlflow_experiment = Experiment(self._config.experiment_name)
         actual_study_name: str = study_name or self.name
@@ -155,6 +222,6 @@ class Study(ABC):
                 f"Study already complete. Best: {optuna_study.best_params}, {self._config.optuna_metric}: {optuna_study.best_value:.4f}"
             )
             mlflow.end_run()
-            return optuna_study, parent_run, True
+            return mlflow_experiment, optuna_study, parent_run, True
 
-        return optuna_study, parent_run, False
+        return mlflow_experiment, optuna_study, parent_run, False

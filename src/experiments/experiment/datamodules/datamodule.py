@@ -8,7 +8,7 @@ from experiments.lib.config_serializing import ClassConfig
 
 @dataclass(frozen=True, kw_only=True)
 class DataModuleConfig(ClassConfig):
-    batch_size: int
+    batch_size: int = 64
 
 
 class DataModule(ABC, L.LightningDataModule):

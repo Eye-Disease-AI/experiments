@@ -19,6 +19,7 @@ from experiments.experiment.callbacks import (
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.experiment.studies.study import Study, StudyConfig
+from experiments.lib.reproducibility import global_seed_rng
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -59,6 +60,7 @@ class BaselineStudy(Study):
         super().__init__(config)
         self._config = config
 
+    @override
     def _suggest_params(self, trial: optuna.Trial) -> dict[_OptunaParams]:
         d: dict[_OptunaParams] = {
             "lr": trial.suggest_float("lr", 1e-6, 1e-4, log=True),
@@ -68,10 +70,12 @@ class BaselineStudy(Study):
         }
         return d
 
+    @override
     def _init_datamodules(self) -> list[DataModule]:
         self._datamodule = self._config.datamodule_config.build()
         return [self._datamodule]
 
+    @override
     def _configure_datamodules(self, params: dict[_OptunaParams]) -> None:
         # TODO: Is this best way to do that?
         # I would say it is better to manually create dataset and reuse it to create dataloaders.
@@ -79,38 +83,45 @@ class BaselineStudy(Study):
         self._datamodule.batch_size = params["batch_size"]
 
     def create_trainer(
-        self, params: dict, run: mlflow.ActiveRun, optuna_callback: OptunaMLflowCallback
+        self,
+        run: mlflow.ActiveRun,
+        optuna_callback: OptunaMLflowCallback | None = None,
+        max_epochs: int | None = None,
+        callbacks: list[L.Callback] | None = None,
     ):
-        callbacks: list[L.Callback] = [optuna_callback]
 
         mlf_logger = MLFlowLogger(
             run_id=run.info.run_id,
             tracking_uri=mlflow.get_tracking_uri(),
-            prefix="ConvNext",
+            prefix=self._config.model_config.class_name(),
         )
 
-        if self._config.use_early_stopping:
-            callbacks.append(
-                EarlyStopping(
-                    monitor="val_loss",
-                    patience=self._config.early_stopping_patience,
-                    mode="min",
+        if not callbacks:
+            callbacks = []
+            if optuna_callback:
+                callbacks.append(optuna_callback)
+            if self._config.use_early_stopping:
+                callbacks.append(
+                    EarlyStopping(
+                        monitor="val_loss",
+                        patience=self._config.early_stopping_patience,
+                        mode="min",
+                    )
                 )
-            )
 
-        if self._config.use_freezing:
-            callbacks.append(
-                BackboneFreezeCallback(
-                    monitor="val_loss",
-                    mode=self._config.backbone_unfreeze_mode,
-                    direction="min",
-                    num_epochs=self._config.backbone_unfreeze_num_epochs,
+            if self._config.use_freezing:
+                callbacks.append(
+                    BackboneFreezeCallback(
+                        monitor="val_loss",
+                        mode=self._config.backbone_unfreeze_mode,
+                        direction="min",
+                        num_epochs=self._config.backbone_unfreeze_num_epochs,
+                    )
                 )
-            )
 
         return L.Trainer(
-            max_epochs=self._config.max_epochs,
-            accelerator="auto",
+            max_epochs=max_epochs or self._config.max_epochs,
+            accelerator=self._config.device,
             logger=mlf_logger,
             callbacks=callbacks,
             enable_progress_bar=True,
@@ -121,6 +132,7 @@ class BaselineStudy(Study):
             deterministic=True,
         )
 
+    @override
     def _train(
         self, params: dict, run: mlflow.ActiveRun, optuna_callback: OptunaMLflowCallback
     ) -> None:
@@ -131,5 +143,38 @@ class BaselineStudy(Study):
             dropout=params["dropout"],
         )
         model = model_config.build()
-        trainer = self.create_trainer(params, run, optuna_callback)
+        trainer = self.create_trainer(run, optuna_callback)
         trainer.fit(model, datamodule=self._datamodule)
+
+    @override
+    def _retrain(
+        self,
+        best_params: dict,
+        best_epoch: int,
+        run: mlflow.ActiveRun,
+    ):
+        global_seed_rng(self._config.seed)
+        self._datamodule.batch_size = best_params["batch_size"]
+        self._datamodule.setup(stage="fit")
+
+        model_config = replace(
+            self._config.model_config,
+            learning_rate=best_params["lr"],
+            weight_decay=best_params["weight_decay"],
+            dropout=best_params["dropout"],
+        )
+        best_model = model_config.build()
+        trainer = self.create_trainer(
+            run=run,
+            # We train for best_epoch+1, because best_epoch is 0-indexed.
+            # e.g. if we want to train up to epoch 2, we need to train for 3 epochs (0, 1, 2).
+            max_epochs=best_epoch + 1,
+        )
+        trainer.fit(best_model, datamodule=self._datamodule)
+        validation_metrics = trainer.validate(best_model, datamodule=self._datamodule)
+        retrain_metric = validation_metrics[0][self._config.optuna_metric]
+        model_name = self._config.model_config.class_name()
+        mlflow.log_metric(
+            f"{model_name}-retrain_{self._config.optuna_metric}", retrain_metric
+        )
+        return trainer, validation_metrics
