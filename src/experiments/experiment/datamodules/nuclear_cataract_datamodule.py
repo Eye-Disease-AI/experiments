@@ -155,7 +155,6 @@ class NuclearCataractDataModule(DataModule):
     def batch_size(self):
         return self._batch_size
 
-    @override
     @batch_size.setter
     def batch_size(self, v: int):
         assert v > 0
