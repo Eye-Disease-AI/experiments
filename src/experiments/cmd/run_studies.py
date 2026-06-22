@@ -1,5 +1,6 @@
-from dataclasses import replace
-
+from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
+    NuclearCataractDataModuleConfig,
+)
 from experiments.experiment.studies.study import StudyConfig
 import torch
 
@@ -9,35 +10,27 @@ from experiments.experiment.studies.baseline_study import BaselineStudyConfig
 EXPERIMENT_NAME = "baseline-hard-policy-test"
 
 STUDIES: list[StudyConfig] = [
-    replace(
-        BaselineStudyConfig(),
+    BaselineStudyConfig(
         experiment_name=EXPERIMENT_NAME + "_dominate",
-        datamodule_config=replace(
-            BaselineStudyConfig().datamodule_config,
+        datamodule_config=NuclearCataractDataModuleConfig(
             hard_policy=HardPolicy.DOMINATE,
         ),
     ),
-    replace(
-        BaselineStudyConfig(),
+    BaselineStudyConfig(
         experiment_name=EXPERIMENT_NAME + "_no_hard",
-        datamodule_config=replace(
-            BaselineStudyConfig().datamodule_config,
+        datamodule_config=NuclearCataractDataModuleConfig(
             hard_policy=HardPolicy.NO_HARD,
         ),
     ),
-    replace(
-        BaselineStudyConfig(),
+    BaselineStudyConfig(
         experiment_name=EXPERIMENT_NAME + "_only_hard",
-        datamodule_config=replace(
-            BaselineStudyConfig().datamodule_config,
+        datamodule_config=NuclearCataractDataModuleConfig(
             hard_policy=HardPolicy.ONLY_HARD,
         ),
     ),
-    replace(
-        BaselineStudyConfig(),
+    BaselineStudyConfig(
         experiment_name=EXPERIMENT_NAME + "_passthrough",
-        datamodule_config=replace(
-            BaselineStudyConfig().datamodule_config,
+        datamodule_config=NuclearCataractDataModuleConfig(
             hard_policy=HardPolicy.PASSTHROUGH,
         ),
     ),

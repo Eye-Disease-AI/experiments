@@ -28,6 +28,7 @@ class BestSnapshotCallback(L.Callback):
         )
         if not improved:
             return
+
         self._best_target = v
         self.best_epoch = trainer.current_epoch
         snap = {}

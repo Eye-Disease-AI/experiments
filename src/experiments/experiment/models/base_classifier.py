@@ -1,20 +1,13 @@
 from dataclasses import dataclass
 from importlib.metadata import PackagePath
-import os
-import tempfile
 
 import lightning as L
-import matplotlib.pyplot as plt
-import mlflow
-import pandas as pd
-import seaborn as sns
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torchmetrics import MetricCollection
 from torchmetrics.classification import (
     MulticlassAUROC,
-    MulticlassConfusionMatrix,
     MulticlassF1Score,
     MulticlassPrecision,
     MulticlassRecall,
@@ -31,7 +24,9 @@ from experiments.lib.config_serializing import (
 class BaseClassifierModelConfig(ClassConfig):
     optimizer: PackagePath = serialize_class(AdamW)
     loss_fn: PackagePath = serialize_class(nn.CrossEntropyLoss)
-    scheduler: PackagePath | None = None # serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR)
+    scheduler: PackagePath | None = (
+        None  # serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR)
+    )
     scheduler_max_t: int = 40
     scheduler_min_lr: float = 1e-6
     backbone_lr_factor: float = 1
@@ -94,46 +89,6 @@ class BaseClassifierModel(L.LightningModule):
 
         self._last_all_probs = all_probs.cpu()
         self._last_all_targets = all_targets.cpu()
-
-    def on_train_end(self):
-        if self._last_all_probs is None:
-            return
-        all_probs = self._last_all_probs.to(self.device)
-        all_targets = self._last_all_targets.to(self.device)
-
-        cm = MulticlassConfusionMatrix(num_classes=self.config.n_classes).to(
-            self.device
-        )
-        cm_matrix = cm(all_probs, all_targets).cpu().numpy()
-        fig, ax = plt.subplots(
-            figsize=(self.config.n_classes * 2, self.config.n_classes * 2)
-        )
-        sns.heatmap(cm_matrix, annot=True, fmt="d", ax=ax, cmap="Blues")
-        ax.set_xlabel("Predicted")
-        ax.set_ylabel("True")
-        mlflow.log_figure(fig, "confusion_matrix.png")
-        plt.close(fig)
-
-        all_preds = all_probs.argmax(dim=1)
-        df = pd.DataFrame(
-            {
-                "true_label": all_targets.cpu().numpy(),
-                "predicted_label": all_preds.cpu().numpy(),
-                **{
-                    f"prob_class_{i}": all_probs[:, i].cpu().numpy()
-                    for i in range(all_probs.shape[1])
-                },
-            }
-        )
-        with tempfile.NamedTemporaryFile(
-            suffix=".csv", delete=False, mode="w", prefix="val_predictions_"
-        ) as f:
-            df.to_csv(f, index=True, index_label="sample_idx")
-            tmppath = f.name
-        try:
-            mlflow.log_artifact(tmppath, artifact_path="val_predictions")
-        finally:
-            os.unlink(tmppath)
 
     def backbone_modules(self) -> list[nn.Module]:
         return []

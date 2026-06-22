@@ -11,7 +11,8 @@ from optuna import create_study
 from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
-from experiments.experiment.callbacks import OptunaMLflowCallback
+from experiments.experiment.callbacks import BestSnapshotCallback, OptunaMLflowCallback
+from lightning.pytorch.loggers import MLFlowLogger
 from experiments.lib.log_silencer import stop_logs
 from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
@@ -60,17 +61,17 @@ class Study(ABC):
     def _train(
         self,
         params: dict[str, Any],
-        run: mlflow.ActiveRun,
-        optuna_callback: OptunaMLflowCallback,
+        logger,
+        callbacks,
     ) -> None: ...
 
     @abstractmethod
     def _retrain(
         self,
-        study_name: str,
+        logger,
         best_params: dict,
         best_epoch: int,
-        run: mlflow.ActiveRun,
+        callbacks,
     ) -> tuple[L.Trainer, dict]: ...
 
     def run(self) -> tuple[Experiment, optuna.Study]:
@@ -97,14 +98,25 @@ class Study(ABC):
                 print("No completed trials. Skipping retrain and plots.")
                 return mlflow_experiment, optuna_study
 
-            _best_trial, best_params, best_epoch = self._parse_optuna_study(
-                optuna_study
-            )
+            best_trial, best_params, best_epoch = self._parse_optuna_study(optuna_study)
 
             if self._config.retrain_best:
                 print("\n#### Retraining\n")
-                trainer, metrics = self._retrain(
-                    best_params=best_params, best_epoch=best_epoch, run=parent_run
+                logger = MLFlowLogger(
+                    run_id=parent_run.info.run_id,
+                    tracking_uri=mlflow.get_tracking_uri(),
+                    prefix=self._config.model_config.class_name(),
+                )
+                best_snapshot = BestSnapshotCallback(
+                    metric=self._config.optuna_metric,
+                    direction=self._config.optuna_direction,
+                    prefix="retrain_",
+                )
+                trainer, _metrics = self._retrain(
+                    logger=logger,
+                    best_params=best_params,
+                    best_epoch=best_epoch,
+                    callbacks=[best_snapshot],
                 )
                 best_model_path = (
                     f"checkpoints/{optuna_study.study_name}/best_retrain.ckpt"
@@ -165,7 +177,19 @@ class Study(ABC):
                 optuna_metric=self._config.optuna_metric,
                 optuna_direction=self._config.optuna_direction,
             )
-            self._train(params, run, optuna_callback)
+            best_snapshot = BestSnapshotCallback(
+                metric=self._config.optuna_metric,
+                direction=self._config.optuna_direction,
+                prefix="best_",
+            )
+            mlf_logger = MLFlowLogger(
+                run_id=run.info.run_id,
+                tracking_uri=mlflow.get_tracking_uri(),
+                prefix=self._config.model_config.class_name(),
+            )
+            self._train(
+                params, logger=mlf_logger, callbacks=[optuna_callback, best_snapshot]
+            )
 
         best_value = optuna_callback.best_value
         if best_value is None:

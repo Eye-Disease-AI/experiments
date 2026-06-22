@@ -119,7 +119,7 @@ class NuclearCataractDataModule(DataModule):
             self.test_set = _SubsetTransformer(test, transform=self.val_transform)
 
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=self._batch_size, num_workers=4, pin_memory=True
+            dataset, batch_size=self._batch_size, num_workers=0, pin_memory=True
         )
 
     @override

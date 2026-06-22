@@ -6,7 +6,6 @@ import lightning as L
 import mlflow
 import optuna
 from lightning.pytorch.callbacks import EarlyStopping
-from lightning.pytorch.loggers import MLFlowLogger
 
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
@@ -15,7 +14,6 @@ from experiments.experiment.models.base_classifier import BaseClassifierModelCon
 from experiments.experiment.models.convnext import ConvNextConfig
 from experiments.experiment.callbacks import (
     BackboneFreezeCallback,
-    OptunaMLflowCallback,
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.experiment.studies.study import Study, StudyConfig
@@ -83,45 +81,32 @@ class BaselineStudy(Study):
 
     def create_trainer(
         self,
-        run: mlflow.ActiveRun,
-        optuna_callback: OptunaMLflowCallback | None = None,
+        logger,
         max_epochs: int | None = None,
-        callbacks: list[L.Callback] | None = None,
+        callbacks: list[L.Callback] = [],
     ):
-
-        mlf_logger = MLFlowLogger(
-            run_id=run.info.run_id,
-            tracking_uri=mlflow.get_tracking_uri(),
-            prefix=self._config.model_config.class_name(),
-        )
-
-        if not callbacks:
-            callbacks = []
-            if optuna_callback:
-                callbacks.append(optuna_callback)
-            if self._config.use_early_stopping:
-                callbacks.append(
-                    EarlyStopping(
-                        monitor="val_loss",
-                        patience=self._config.early_stopping_patience,
-                        mode="min",
-                    )
+        if self._config.use_early_stopping:
+            callbacks.append(
+                EarlyStopping(
+                    monitor="val_loss",
+                    patience=self._config.early_stopping_patience,
+                    mode="min",
                 )
-
-            if self._config.use_freezing:
-                callbacks.append(
-                    BackboneFreezeCallback(
-                        monitor="val_loss",
-                        mode=self._config.backbone_unfreeze_mode,
-                        direction="min",
-                        num_epochs=self._config.backbone_unfreeze_num_epochs,
-                    )
+            )
+        if self._config.use_freezing:
+            callbacks.append(
+                BackboneFreezeCallback(
+                    monitor="val_loss",
+                    mode=self._config.backbone_unfreeze_mode,
+                    direction="min",
+                    num_epochs=self._config.backbone_unfreeze_num_epochs,
                 )
+            )
 
         return L.Trainer(
             max_epochs=max_epochs or self._config.max_epochs,
             accelerator=self._config.device,
-            logger=mlf_logger,
+            logger=logger,
             callbacks=callbacks,
             enable_progress_bar=True,
             enable_model_summary=False,
@@ -132,9 +117,7 @@ class BaselineStudy(Study):
         )
 
     @override
-    def _train(
-        self, params: dict, run: mlflow.ActiveRun, optuna_callback: OptunaMLflowCallback
-    ) -> None:
+    def _train(self, params: dict, logger, callbacks: list = []) -> None:
         model_config = replace(
             self._config.model_config,
             learning_rate=params["lr"],
@@ -144,16 +127,13 @@ class BaselineStudy(Study):
             n_classes=self._datamodule.n_classes,
         )
         model = model_config.build()
-        trainer = self.create_trainer(run, optuna_callback)
+        trainer = self.create_trainer(logger=logger, callbacks=callbacks)
         global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)
 
     @override
     def _retrain(
-        self,
-        best_params: dict,
-        best_epoch: int,
-        run: mlflow.ActiveRun,
+        self, best_params: dict, best_epoch: int, logger, callbacks: list = []
     ):
         self._datamodule.batch_size = best_params["batch_size"]
         self._datamodule.setup(stage="fit")
@@ -167,14 +147,15 @@ class BaselineStudy(Study):
         )
         best_model = model_config.build()
         trainer = self.create_trainer(
-            run=run,
+            logger=logger,
             # We train for best_epoch+1, because best_epoch is 0-indexed.
             # e.g. if we want to train up to epoch 2, we need to train for 3 epochs (0, 1, 2).
             max_epochs=best_epoch + 1,
+            callbacks=callbacks,
         )
         global_seed_rng(self._config.seed)
         trainer.fit(best_model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(best_model, datamodule=self._datamodule)
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
-        mlflow.log_metric(f"retrain_best_{self._config.optuna_metric}", retrain_metric)
+        mlflow.log_metric(f"retrain_{self._config.optuna_metric}", retrain_metric)
         return trainer, validation_metrics
