@@ -45,5 +45,6 @@ class DataModule(ABC, L.LightningDataModule):
     @abstractmethod
     def test_dataloader(self: DataModule) -> DataLoader: ...
 
+    @property
     def class_weights(self) -> torch.Tensor | None:
         return None

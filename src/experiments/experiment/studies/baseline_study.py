@@ -140,7 +140,8 @@ class BaselineStudy(Study):
             learning_rate=params["lr"],
             weight_decay=params["weight_decay"],
             dropout=params["dropout"],
-            class_weights=self._datamodule.class_weights(),
+            class_weights=self._datamodule.class_weights,
+            n_classes=self._datamodule.n_classes,
         )
         model = model_config.build()
         trainer = self.create_trainer(run, optuna_callback)
@@ -161,7 +162,8 @@ class BaselineStudy(Study):
             learning_rate=best_params["lr"],
             weight_decay=best_params["weight_decay"],
             dropout=best_params["dropout"],
-            class_weights=self._datamodule.class_weights(),
+            class_weights=self._datamodule.class_weights,
+            n_classes=self._datamodule.n_classes,
         )
         best_model = model_config.build()
         trainer = self.create_trainer(
