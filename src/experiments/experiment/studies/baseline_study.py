@@ -49,6 +49,8 @@ _OptunaParams = Literal["lr", "weight_decay", "dropout", "batch_size"]
 
 
 class BaselineStudy(Study):
+    _config: BaselineStudyConfig
+
     def __init__(
         self,
         config: BaselineStudyConfig,
