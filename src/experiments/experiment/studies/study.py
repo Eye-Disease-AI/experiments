@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import tempfile
 from typing import Any, Literal, override
 import lightning as L
 from matplotlib import pyplot as plt
@@ -39,6 +40,8 @@ class StudyConfig(ClassConfig):
 
 
 class Study(ABC):
+    MLFLOW_STUDY_CONFIG_FILE_PATH: str = "study_config.json"
+
     def __init__(
         self,
         config: StudyConfig,
@@ -82,6 +85,12 @@ class Study(ABC):
         if already_complete:
             return mlflow_experiment, optuna_study
         try:
+            with tempfile.NamedTemporaryFile(mode="w") as file:
+                file.write(self._config.to_json())
+                mlflow.log_artifact(
+                    file.name, artifact_path=Study.MLFLOW_STUDY_CONFIG_FILE_PATH
+                )
+
             optuna_study.optimize(
                 self._objective,
                 n_trials=self._config.max_trials * 2,

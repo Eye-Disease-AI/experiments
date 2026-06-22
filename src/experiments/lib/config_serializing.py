@@ -3,6 +3,7 @@ import importlib
 from importlib.metadata import PackagePath
 from typing import Any
 from dataclasses import dataclass, fields, is_dataclass
+import json
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -25,16 +26,18 @@ class ClassConfig(ABC):
             serialize_class(self.get_configured_class()),
         )
 
-    @staticmethod
-    def _config_to_dict(config):
-        if is_dataclass(config):
-            return {
-                f.name: config._config_to_dict(getattr(config, f.name))
-                for f in fields(config)
+    def to_dict(self, save_class=False):
+        if is_dataclass(self):
+            d = {
+                f.name: ClassConfig.to_dict(getattr(self, f.name), save_class)
+                for f in fields(self)
             }
-        if isinstance(config, (list, tuple)):
-            return list(config)
-        return config
+            if save_class:
+                d |= {"__cfg__": serialize_class(type(self))}
+            return d
+        if isinstance(self, (list, tuple)):
+            return list(ClassConfig.to_dict(self, save_class))
+        return self
 
     @staticmethod
     def _flatten_dict(d, prefix=""):
@@ -50,13 +53,42 @@ class ClassConfig(ABC):
         return out
 
     def serialize_config(self):
-        return ClassConfig._flatten_dict(ClassConfig._config_to_dict(self))
+        return ClassConfig._flatten_dict(ClassConfig.to_dict(self))
 
     def build(self):
         self.post_init_checks()
         if not self.configured_class:
             raise Exception("fConfigured class not set (={self.configured_class}).")
         return deserialize_class(self.configured_class)(self)
+
+    @staticmethod
+    def from_dict(d, _first_recursion=True):
+        if isinstance(d, dict) and "__cfg__" in d:
+            # Then it's a ClassConfig dict that can be deserialized into a ClassConfig
+            cls = deserialize_class(d["__cfg__"])
+            kwds = {}
+            for k, v in d.items():
+                if k == "__cfg__":
+                    # skip the __cfg__ field only useful for deserialising
+                    continue
+                kwds[k] = ClassConfig.from_dict(v, _first_recursion=False)
+            return cls(**kwds)
+
+        # If its the first recursion and the dict has no __cfg__ then it must
+        # have been called on an invalid dict that cannot be used to instantiate
+        # a ClassConfig
+        assert not _first_recursion
+
+        if isinstance(d, (list, tuple)):
+            return [ClassConfig.from_dict(x, _first_recursion=False) for x in d]
+        return d
+
+    def to_json(self):
+        return json.dumps(ClassConfig.to_dict(self))
+
+    @staticmethod
+    def from_json(s):
+        return ClassConfig.from_dict(json.loads(s))
 
 
 def deserialize_class(path: PackagePath) -> Any:
