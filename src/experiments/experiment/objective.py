@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 import time
 
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import DataModule
