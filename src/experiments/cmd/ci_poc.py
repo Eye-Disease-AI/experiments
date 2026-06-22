@@ -5,28 +5,7 @@ import numpy as np
 from scipy import stats
 from experiments.lib.mlflow_setup import Experiment
 from experiments.experiment import common_config
-
-
-def get_trial_vals(exp: Experiment, study_name: str) -> list[dict[str, float]]:
-    mlflow_exp = exp.client.get_experiment_by_name(exp.experiment_name)
-    runs = exp.client.search_runs(
-        experiment_ids=[mlflow_exp.experiment_id],  # pyright: ignore
-        filter_string=(
-            f"tags.optuna_study = '{study_name}' and tags.validation_sample = 'true'"
-        ),
-    )
-    print(f"Found {len(runs)} validation-sample runs for study '{study_name}'.")
-    result = []
-    for r in runs:
-        sample = {}
-        for k, v in r.data.metrics.items():
-            if k.startswith("best_val_"):
-                sample[k[len("best_") :]] = v
-        if sample:
-            result.append(sample)
-        else:
-            print(f"WARNING: Run {r.info.run_id} is empty!")
-    return result
+from experiments.lib.reproducibility import get_trial_vals
 
 
 def calculate_ci(
