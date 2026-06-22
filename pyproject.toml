@@ -26,6 +26,8 @@ dependencies = [
 
 [project.scripts]
 all = "experiments.cmd.run_all:main"
+studies = "experiments.cmd.run_studies:main"
+debug = "experiments.cmd.run_debug:main"
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
