@@ -11,7 +11,7 @@ import mlflow
 class BestSnapshotCallback(L.Callback):
     def __init__(self, metric: str, direction: Literal["min", "max"], prefix="best_"):
         self.prefix = prefix
-        self.best_metrics = {}
+        self.best_metrics: dict = {}
         self.optimised_metric = metric
         self.best_epoch = None
         self._best_target = None
@@ -60,7 +60,7 @@ class OptunaMLflowCallback(L.Callback):
         self.exp = exp
         self.run_id = run_id
         self.log_every_n_epochs = log_every_n_epochs
-        self.buffer = []
+        self.buffer: list = []
         self.best_value = None
         self.optuna_metric = optuna_metric
         self.optuna_direction = optuna_direction
