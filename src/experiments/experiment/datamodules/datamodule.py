@@ -1,6 +1,7 @@
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
 import lightning as L
+import torch
 from torch.utils.data.dataloader import DataLoader
 
 from experiments.lib.config_serializing import ClassConfig
@@ -43,3 +44,6 @@ class DataModule(ABC, L.LightningDataModule):
 
     @abstractmethod
     def test_dataloader(self: DataModule) -> DataLoader: ...
+
+    def class_weights(self) -> torch.Tensor | None:
+        return None

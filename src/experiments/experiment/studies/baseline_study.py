@@ -40,6 +40,7 @@ class BaselineStudyConfig(StudyConfig):
     backbone_unfreeze_num_epochs: int = 5
     use_early_stopping: bool = True
     use_freezing: bool = False
+    use_class_weights = True
 
     @override
     @staticmethod
@@ -70,7 +71,7 @@ class BaselineStudy(Study):
 
     @override
     def _init_datamodules(self) -> list[DataModule]:
-        self._datamodule = self._config.datamodule_config.build()
+        self._datamodule: DataModule = self._config.datamodule_config.build()
         return [self._datamodule]
 
     @override
@@ -139,9 +140,11 @@ class BaselineStudy(Study):
             learning_rate=params["lr"],
             weight_decay=params["weight_decay"],
             dropout=params["dropout"],
+            class_weights=self._datamodule.class_weights(),
         )
         model = model_config.build()
         trainer = self.create_trainer(run, optuna_callback)
+        global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)
 
     @override
@@ -151,15 +154,14 @@ class BaselineStudy(Study):
         best_epoch: int,
         run: mlflow.ActiveRun,
     ):
-        global_seed_rng(self._config.seed)
         self._datamodule.batch_size = best_params["batch_size"]
         self._datamodule.setup(stage="fit")
-
         model_config = replace(
             self._config.model_config,
             learning_rate=best_params["lr"],
             weight_decay=best_params["weight_decay"],
             dropout=best_params["dropout"],
+            class_weights=self._datamodule.class_weights(),
         )
         best_model = model_config.build()
         trainer = self.create_trainer(
@@ -168,6 +170,7 @@ class BaselineStudy(Study):
             # e.g. if we want to train up to epoch 2, we need to train for 3 epochs (0, 1, 2).
             max_epochs=best_epoch + 1,
         )
+        global_seed_rng(self._config.seed)
         trainer.fit(best_model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(best_model, datamodule=self._datamodule)
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
