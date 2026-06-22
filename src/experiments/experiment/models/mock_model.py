@@ -4,32 +4,26 @@ from typing import override
 import torch
 import torch.nn as nn
 
-from experiments.experiment.models.base_classifier import BaseClassifierModel, BaseClassifierModelConfig
+from experiments.experiment.models.base_classifier import (
+    BaseClassifierModel,
+)
+from experiments.experiment.models.convnext import ConvNextConfig
+
 
 @dataclass(frozen=True, kw_only=True)
-class MockModelConfig(BaseClassifierModelConfig):
+class MockConvNextConfig(ConvNextConfig):
     @staticmethod
     @override
     def get_configured_class():
-        return MockModel
+        return MockConvNext
 
 
-class MockModel(BaseClassifierModel):
-    DEFAULT_CONFIG: MockModelConfig
-
-    def __init__(
-        self,
-        config: MockModelConfig,
-    ):
+class MockConvNext(BaseClassifierModel):
+    def __init__(self, config: MockConvNextConfig):
         super().__init__(config)
+        self.save_hyperparameters()
+        self.head = nn.Linear(1, config.n_classes)
 
-    def backbone_modules(self) -> list[nn.Module]:
-        return [self.model.features]
-
+    @override
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.zeros_like(self.config.n_classses)
-
-
-MockModel.DEFAULT_CONFIG = MockModelConfig(
-    **vars(BaseClassifierModel.DEFAULT_CONFIG)
-)
+        return self.head(x.flatten(1).mean(dim=1, keepdim=True))
