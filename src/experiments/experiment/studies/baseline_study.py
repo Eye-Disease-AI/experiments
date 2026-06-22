@@ -1,5 +1,5 @@
 from dataclasses import dataclass, replace
-from typing import Any, Literal, override
+from typing import Any, Literal, TypedDict, override
 
 from dataset.hard_policy import HardPolicy
 import lightning as L
@@ -45,10 +45,14 @@ class BaselineStudyConfig(StudyConfig):
         return BaselineStudy
 
 
-_OptunaParams = Literal["lr", "weight_decay", "dropout", "batch_size"]
+class OptunaParams(TypedDict):
+    lr: float
+    weight_decay: float
+    dropout: float
+    batch_size: int
 
 
-class BaselineStudy(Study):
+class BaselineStudy(Study[OptunaParams]):
     _config: BaselineStudyConfig
 
     def __init__(
@@ -59,14 +63,13 @@ class BaselineStudy(Study):
         self._config = config
 
     @override
-    def _suggest_params(self, trial: optuna.Trial) -> dict[_OptunaParams, Any]:
-        d: dict[_OptunaParams, Any] = {
-            "lr": trial.suggest_float("lr", 1e-6, 1e-4, log=True),
-            "weight_decay": trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True),
-            "dropout": trial.suggest_float("dropout", 0.0, 0.5),
-            "batch_size": trial.suggest_categorical("batch_size", [64]),
-        }
-        return d
+    def _suggest_params(self, trial: optuna.Trial) -> OptunaParams:
+        return OptunaParams(
+            lr=trial.suggest_float("lr", 1e-6, 1e-4, log=True),
+            weight_decay=trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True),
+            dropout=trial.suggest_float("dropout", 0.0, 0.5),
+            batch_size=trial.suggest_categorical("batch_size", [64]),
+        )
 
     @override
     def _init_datamodules(self) -> list[DataModule]:
@@ -74,7 +77,7 @@ class BaselineStudy(Study):
         return [self._datamodule]
 
     @override
-    def _configure_datamodules(self, params: dict[_OptunaParams, Any]) -> None:
+    def _configure_datamodules(self, params: OptunaParams) -> None:
         # TODO: Is this best way to do that?
         # I would say it is better to manually create dataset and reuse it to create dataloaders.
         # In other words: just pass dataset to the datamodule class, so it will reuse caches.
@@ -118,7 +121,7 @@ class BaselineStudy(Study):
         )
 
     @override
-    def _train(self, params: dict, get_logger, callbacks: list = []) -> None:
+    def _train(self, params: OptunaParams, get_logger, callbacks: list = []) -> None:
         model_config = replace(
             self._config.model_config,
             learning_rate=params["lr"],

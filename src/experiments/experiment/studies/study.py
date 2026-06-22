@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 import tempfile
 from typing import Any, Literal, override
@@ -39,7 +40,7 @@ class StudyConfig(ClassConfig):
             raise Exception(f"experiment_name is {self.experiment_name}")
 
 
-class Study(ABC):
+class Study[OptunaParams: Mapping[str, Any]](ABC):
     MLFLOW_STUDY_CONFIG_FILE_PATH: str = "study_config.json"
 
     def __init__(
@@ -51,19 +52,19 @@ class Study(ABC):
         stop_logs()
 
     @abstractmethod
-    def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]: ...
+    def _suggest_params(self, trial: optuna.Trial) -> OptunaParams: ...
 
     # This method should set all needed data modules as class fields and return list of them.
     @abstractmethod
     def _init_datamodules(self) -> list[DataModule]: ...
 
     @abstractmethod
-    def _configure_datamodules(self, params: dict[str, Any]) -> None: ...
+    def _configure_datamodules(self, params: OptunaParams) -> None: ...
 
     @abstractmethod
     def _train(
         self,
-        params: dict[str, Any],
+        params: OptunaParams,
         get_logger,
         callbacks,
     ) -> None: ...
