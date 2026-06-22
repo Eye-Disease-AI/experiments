@@ -64,14 +64,14 @@ class Study(ABC):
     def _train(
         self,
         params: dict[str, Any],
-        logger,
+        get_logger,
         callbacks,
     ) -> None: ...
 
     @abstractmethod
     def _retrain(
         self,
-        logger,
+        get_logger,
         best_params: dict,
         best_epoch: int,
         callbacks,
@@ -111,18 +111,15 @@ class Study(ABC):
 
             if self._config.retrain_best:
                 print("\n#### Retraining\n")
-                logger = MLFlowLogger(
-                    run_id=parent_run.info.run_id,
-                    tracking_uri=mlflow.get_tracking_uri(),
-                    prefix=self._config.model_config.class_name(),
-                )
                 best_snapshot = BestSnapshotCallback(
                     metric=self._config.optuna_metric,
                     direction=self._config.optuna_direction,
                     prefix="retrain_",
                 )
                 trainer, _metrics = self._retrain(
-                    logger=logger,
+                    get_logger=self._get_logger_func(
+                        parent_run.info.run_id, mlflow.get_tracking_uri()
+                    ),
                     best_params=best_params,
                     best_epoch=best_epoch,
                     callbacks=[best_snapshot],
@@ -191,13 +188,12 @@ class Study(ABC):
                 direction=self._config.optuna_direction,
                 prefix="best_",
             )
-            mlf_logger = MLFlowLogger(
-                run_id=run.info.run_id,
-                tracking_uri=mlflow.get_tracking_uri(),
-                prefix=self._config.model_config.class_name(),
-            )
             self._train(
-                params, logger=mlf_logger, callbacks=[optuna_callback, best_snapshot]
+                params,
+                get_logger=self._get_logger_func(
+                    run.info.run_id, mlflow.get_tracking_uri()
+                ),
+                callbacks=[optuna_callback, best_snapshot],
             )
 
         best_value = optuna_callback.best_value
@@ -209,6 +205,13 @@ class Study(ABC):
             )
 
         return best_value
+
+    def _get_logger_func(self, run_id, tracking_uri):
+        return lambda prefix: MLFlowLogger(
+            run_id=run_id,
+            tracking_uri=tracking_uri,
+            prefix=prefix,
+        )
 
     def _prepare_datamodules(self):
         global_seed_rng(self._config.seed)

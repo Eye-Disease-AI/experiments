@@ -117,7 +117,7 @@ class BaselineStudy(Study):
         )
 
     @override
-    def _train(self, params: dict, logger, callbacks: list = []) -> None:
+    def _train(self, params: dict, get_logger, callbacks: list = []) -> None:
         model_config = replace(
             self._config.model_config,
             learning_rate=params["lr"],
@@ -127,13 +127,16 @@ class BaselineStudy(Study):
             n_classes=self._datamodule.n_classes,
         )
         model = model_config.build()
-        trainer = self.create_trainer(logger=logger, callbacks=callbacks)
+        trainer = self.create_trainer(
+            logger=get_logger(self._config.model_config.class_name()),
+            callbacks=callbacks,
+        )
         global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)
 
     @override
     def _retrain(
-        self, best_params: dict, best_epoch: int, logger, callbacks: list = []
+        self, best_params: dict, best_epoch: int, get_logger, callbacks: list = []
     ):
         self._datamodule.batch_size = best_params["batch_size"]
         self._datamodule.setup(stage="fit")
@@ -147,7 +150,7 @@ class BaselineStudy(Study):
         )
         best_model = model_config.build()
         trainer = self.create_trainer(
-            logger=logger,
+            logger=get_logger(self._config.model_config.class_name()),
             # We train for best_epoch+1, because best_epoch is 0-indexed.
             # e.g. if we want to train up to epoch 2, we need to train for 3 epochs (0, 1, 2).
             max_epochs=best_epoch + 1,
