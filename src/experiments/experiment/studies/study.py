@@ -12,6 +12,7 @@ from optuna.study import MaxTrialsCallback
 from optuna.trial import TrialState
 
 from experiments.experiment.callbacks import OptunaMLflowCallback
+from experiments.lib.log_silencer import stop_logs
 from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.config_serializing import ClassConfig
@@ -43,6 +44,7 @@ class Study(ABC):
     ) -> None:
         self._config = config
         self.name = f"{config.experiment_name}_{get_git_sha()}"
+        stop_logs()
 
     @abstractmethod
     def _suggest_params(self, trial: optuna.Trial) -> dict[str, Any]: ...
