@@ -7,11 +7,9 @@ repos:
       - id: check-added-large-files
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.1.0  # run `pre-commit autoupdate` to pin the newest
+    rev: v2.1.0
     hooks:
       - id: mypy
-        args: [--strict, --ignore-missing-imports]
-        additional_dependencies: []  # see note below
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.15
