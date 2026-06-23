@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from importlib.metadata import PackagePath
 
 import lightning as L
 import torch
@@ -22,9 +21,9 @@ from experiments.lib.config_serializing import (
 
 @dataclass(frozen=True, kw_only=True)
 class BaseClassifierModelConfig(ClassConfig):
-    optimizer: PackagePath = must_serialize_class(AdamW)
-    loss_fn: PackagePath = must_serialize_class(nn.CrossEntropyLoss)
-    scheduler: PackagePath | None = (
+    optimizer: str = must_serialize_class(AdamW)
+    loss_fn: str = must_serialize_class(nn.CrossEntropyLoss)
+    scheduler: str | None = (
         None  # serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR)
     )
     scheduler_max_t: int = 40

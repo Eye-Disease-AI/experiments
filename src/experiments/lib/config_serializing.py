@@ -91,11 +91,11 @@ class ClassConfig(ABC):
         return ClassConfig.from_dict(json.loads(s))
 
 
-def deserialize_class(path: PackagePath | None) -> Any:
+def deserialize_class(path: str | None) -> Any:
     """'package.module.ClassName' -> object"""
     if path is None:
         return None
-    module_path, _, attr_name = str(path).rpartition(".")
+    module_path, _, attr_name = path.rpartition(".")
     module = importlib.import_module(module_path)
     return getattr(module, attr_name)
 
