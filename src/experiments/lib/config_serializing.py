@@ -36,7 +36,7 @@ class ClassConfig(ABC):
                 d |= {"__cfg__": serialize_class(type(self))}
             return d
         if isinstance(self, (list, tuple)):
-            return list(ClassConfig.to_dict(self, save_class))
+            return [ClassConfig.to_dict(x, save_class) for x in self]
         return self
 
     @staticmethod
