@@ -100,13 +100,13 @@ def deserialize_class(path: PackagePath | None) -> Any:
     return getattr(module, attr_name)
 
 
-def serialize_class(cls) -> PackagePath | None:
+def serialize_class(cls) -> str | None:
     """object -> 'package.module.ClassName'"""
     if cls is None:
         return None
     return must_serialize_class(cls)
 
 
-def must_serialize_class(cls) -> PackagePath:
+def must_serialize_class(cls) -> str:
     assert cls is not None
-    return PackagePath(f"{cls.__module__}.{cls.__qualname__}")
+    return f"{cls.__module__}.{cls.__qualname__}"
