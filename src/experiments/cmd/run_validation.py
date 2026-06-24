@@ -22,30 +22,28 @@ from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 import experiments.experiment.models
 
 
-"""
-TODO - rewrite
-Do we need it?
-Nope, we don't even use it anywhere.
-"""
-
-
 def parse_logged(v):
+    """
+    TODO - rewrite
+
+    Do we need it?
+    Nope, we don't even use it anywhere.
+    """
     try:
         return ast.literal_eval(v)
     except ValueError, SyntaxError:
         return v
 
 
-"""
-TODO - rewrite
-I don't think we need this anymore. We can load whole configs
-from mlflow now. We do log json and we can then load it to
-construct complete study config.
-"""
-
-
 def coerce_config(current, v):
     """
+    TODO - rewrite
+
+    I don't think we need this anymore. We can load whole configs
+    from mlflow now. We do log json and we can then load it to
+    construct complete study config.
+
+
     current: The config value which we'd like to override,
         in common_config
     v: a string value of the config saved to mlflow which
@@ -72,45 +70,43 @@ def coerce_config(current, v):
         raise Exception("coerce_config: Unsupported type")
 
 
-"""
-TODO - rewrite
-We are not guaranteed to have Nuclear Cataract datamodule anymore.
-Moreover we can have multiple modules for a given study class, so
-I think it could be the best that the study class implemented this logic.
-"""
-
-
 def datamodule_change_subsets(
     dm: NuclearCataractDataModule,
     train_sub: NuclearCataractSubset,
     val_sub: NuclearCataractSubset,
 ):
+    """
+    TODO - rewrite
+
+    We are not guaranteed to have Nuclear Cataract datamodule anymore.
+    Moreover we can have multiple modules for a given study class, so
+    I think it could be the best that the study class implemented this logic.
+    """
     dm.train_set = _SubsetTransformer(train_sub, transform=dm.transform)
     dm.val_set = _SubsetTransformer(val_sub, transform=dm.val_transform)
     dm.train_class_weights = train_sub.class_weights()
     return dm
 
 
-"""
-TODO - rewrite
-Hmm... here again we depend on the fact we have one specific study.
-So this is study specific too, so it should probably be in the study class.
-I am thinking what if we divided studies into two kinds:
-
-* KFoldCValidatable
-* SeedValidatable
-
-and let child classes decide if they want to implement the required methods.
-I don't know if Python has interfaces, but these could also be ABC or inherit
-Study, which is ABC.
-
-Question: What is BestSnapshotCallback for?
-"""
-
-
 def train_and_validate(
     ModelClass, dm: NuclearCataractDataModule, best_params, run, snapshot_prefix=None
 ):
+    """
+    TODO - rewrite
+
+    Hmm... here again we depend on the fact we have one specific study.
+    So this is study specific too, so it should probably be in the study class.
+    I am thinking what if we divided studies into two kinds:
+
+    * KFoldCValidatable
+    * SeedValidatable
+
+    and let child classes decide if they want to implement the required methods.
+    I don't know if Python has interfaces, but these could also be ABC or inherit
+    Study, which is ABC.
+
+    Question: What is BestSnapshotCallback for?
+    """
     params = {k: v for k, v in best_params.items() if k != "batch_size"}
     model = ModelClass(
         dm.dataset.n_classes, **params, class_weights=dm.train_class_weights
@@ -130,6 +126,13 @@ def train_and_validate(
 
 
 def summarize(results, name):
+    """
+    TODO - rewrite
+
+    This just prints some array statistics. I don't know the exact format of
+    the data that is used here. results[0] seem ot be the keys/names?
+    So results is probably dict with arrays as values and metrics as keys?
+    """
     print(f"\n=== Summary across {len(results)} {name} ===")
     for k in sorted(results[0]):
         vals = np.array([r[k] for r in results])
@@ -140,6 +143,13 @@ def summarize(results, name):
 
 
 def load_study_hparams(study):
+    """
+    TODO - rewrite
+
+    I think here we can just load params from the JSON that we
+    saved earlier. Just some logic to get that out of MLFLow
+    and it should work.
+    """
     # Loading configs
     logged_config = study.user_attrs.get("config") or {}
     config_changed = {
@@ -175,6 +185,12 @@ def load_study_hparams(study):
 def run_kfold_validation(
     ModelClass, dm, best_params, hard_policy, seed, validation_study_name, K
 ):
+    """
+    TODO - rewrite
+
+    This just trains model with best params over all KFold splits nad logs
+    the results to MLFLow.
+    """
     results = []
     dataset = NuclearCataractDataset(
         NuclearCataractDataset.KFoldCVMode(K),
@@ -199,6 +215,12 @@ def run_kfold_validation(
 def run_seeds_validation(
     ModelClass, dm, best_params, hard_policy, seed, validation_study_name, num_seeds
 ):
+    """
+    TODO - rewrite
+
+    This does the same as run_kfold_validation, but what it changes are seeds and
+    not dataset splits.
+    """
     results = []
     dataset = NuclearCataractDataset(
         NuclearCataractDataset.TrainValMode(0.8, 0.2),
@@ -222,6 +244,16 @@ def run_seeds_validation(
 
 
 def main():
+    """
+    TODO - retrain
+
+    This defines CLI that:
+
+    * saves best params to a new validation study
+    * retrains the model using best parameters
+    * trains the model in either Kfoldcv or Seeds mode and logs the results
+    """
+
     for _, _name, _ in pkgutil.iter_modules(experiments.experiment.models.__path__):
         importlib.import_module(f"experiments.experiment.models.{_name}")
     SHA = get_git_sha()
