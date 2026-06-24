@@ -22,11 +22,26 @@ from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 import experiments.experiment.models
 
 
+"""
+TODO - rewrite
+Do we need it?
+Nope, we don't even use it anywhere.
+"""
+
+
 def parse_logged(v):
     try:
         return ast.literal_eval(v)
     except ValueError, SyntaxError:
         return v
+
+
+"""
+TODO - rewrite
+I don't think we need this anymore. We can load whole configs
+from mlflow now. We do log json and we can then load it to
+construct complete study config.
+"""
 
 
 def coerce_config(current, v):
@@ -57,6 +72,14 @@ def coerce_config(current, v):
         raise Exception("coerce_config: Unsupported type")
 
 
+"""
+TODO - rewrite
+We are not guaranteed to have Nuclear Cataract datamodule anymore.
+Moreover we can have multiple modules for a given study class, so
+I think it could be the best that the study class implemented this logic.
+"""
+
+
 def datamodule_change_subsets(
     dm: NuclearCataractDataModule,
     train_sub: NuclearCataractSubset,
@@ -66,6 +89,23 @@ def datamodule_change_subsets(
     dm.val_set = _SubsetTransformer(val_sub, transform=dm.val_transform)
     dm.train_class_weights = train_sub.class_weights()
     return dm
+
+
+"""
+TODO - rewrite
+Hmm... here again we depend on the fact we have one specific study.
+So this is study specific too, so it should probably be in the study class.
+I am thinking what if we divided studies into two kinds:
+
+* KFoldCValidatable
+* SeedValidatable
+
+and let child classes decide if they want to implement the required methods.
+I don't know if Python has interfaces, but these could also be ABC or inherit
+Study, which is ABC.
+
+Question: What is BestSnapshotCallback for?
+"""
 
 
 def train_and_validate(
