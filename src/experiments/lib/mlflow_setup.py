@@ -9,7 +9,7 @@ from optuna.storages import RDBStorage
 
 
 class Experiment:
-    def __init__(self, experiment_name):
+    def __init__(self, experiment_name: str | None = None):
         self.experiment_name = experiment_name
         self.study: optuna.study.Study | None = None
 
@@ -44,7 +44,9 @@ class Experiment:
 
     def connect(self):
         mlflow.set_tracking_uri(self.MLFLOW_URI)
-        mlflow.set_experiment(self.experiment_name)
+
+        if self.experiment_name:
+            mlflow.set_experiment(self.experiment_name)
 
         self.client = mlflow.MlflowClient()
         self.storage = RDBStorage(url=self.OPTUNA_DB_URL)
