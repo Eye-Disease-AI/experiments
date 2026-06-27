@@ -30,7 +30,13 @@ contain information about which seed or which fold was used
 """
 
 import argparse
+import os
+from tempfile import TemporaryDirectory
+from experiments.experiment.studies.study import Study
+from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
+import mlflow
+import mlflow.entities
 import optuna
 
 
@@ -43,16 +49,58 @@ class StudyValidator:
         self.experiment_name = experiment_name
         self.study_name = study_name
 
+    def _find_parent_run(self) -> mlflow.entities.Run | None:
+        client = Experiment().client
+        mlflow_exp = client.get_experiment_by_name(self.experiment_name)
+
+        if not mlflow_exp:
+            return None
+
+        for run in client.search_runs([mlflow_exp.experiment_id], max_results=9999):
+            if (
+                run.data.tags["optuna_study"] == self.study_name
+                and "mlflow.parentRunId" not in run.data.tags
+            ):
+                return run
+
+        return None
+
     def _find_best_params(self):
         exp = Experiment(self.experiment_name)
         study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
+        run = self._find_parent_run()
+
+        assert run is not None
+        print(exp.client.list_artifacts(run.info.run_id))
+
+        with TemporaryDirectory() as tmp_dir:
+            config_file_path = exp.client.download_artifacts(
+                run.info.run_id, Study.MLFLOW_STUDY_CONFIG_FILE_PATH, tmp_dir
+            )
+            with open(config_file_path, "r") as config_tmp_file:
+                config_file_json = config_tmp_file.read()
+                print(ClassConfig.from_json(config_file_json))
+
         print(study.best_params)
 
     @staticmethod
-    def list_studies():
-        storage = Experiment().storage
-        for summary in optuna.get_all_study_summaries(storage=storage):
-            print(summary.study_name)
+    def list_all_runs(parent_only=True):
+        client = Experiment().client
+        for experiment in client.search_experiments():
+            runs = client.search_runs([experiment.experiment_id], max_results=5000)
+
+            if parent_only:
+                runs = [
+                    run for run in runs if "mlflow.parentRunId" not in run.data.tags
+                ]
+
+            if len(runs) > 0:
+                print(f"Experiment {experiment.name} runs:")
+                for run in runs:
+                    this_script_path = os.path.relpath(__file__)
+                    print(
+                        f"\tuv run {this_script_path} --experiment_name {experiment.name} --run_to_verify {run.data.tags['optuna_study']}"
+                    )
 
 
 class KFoldValidator:
@@ -68,7 +116,7 @@ class SeedsValidator:
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_name", type=str)
-    parser.add_argument("--study_to_verify", type=str)
+    parser.add_argument("--run_to_verify", type=str)
     parser.add_argument(
         "--mode", type=str, choices=["kfold", "seeds", "list"], default="list"
     )
@@ -82,9 +130,9 @@ def main():
 
     match args.mode:
         case "list":
-            StudyValidator.list_studies()
+            StudyValidator.list_all_runs()
         case "kfold" | "seeds":
-            validator = StudyValidator(args.experiment_name, args.study_to_verify)
+            validator = StudyValidator(args.experiment_name, args.run_to_verify)
             print(validator._find_best_params())
 
 

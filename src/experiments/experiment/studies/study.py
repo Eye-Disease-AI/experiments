@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
+import os
 import tempfile
 from typing import Any, Literal, override
 import lightning as L
@@ -86,11 +87,12 @@ class Study[OptunaParams: Mapping[str, Any]](ABC):
         if already_complete:
             return mlflow_experiment, optuna_study
         try:
-            with tempfile.NamedTemporaryFile(mode="w") as file:
-                file.write(self._config.to_json())
-                mlflow.log_artifact(
-                    file.name, artifact_path=Study.MLFLOW_STUDY_CONFIG_FILE_PATH
-                )
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                config_path = os.path.join(tmp_dir, Study.MLFLOW_STUDY_CONFIG_FILE_PATH)
+                with open(config_path, "w") as study_config:
+                    study_config.write(self._config.to_json(True))
+                    study_config.flush()
+                    mlflow.log_artifact(config_path)
 
             optuna_study.optimize(
                 self._objective,

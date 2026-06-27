@@ -83,8 +83,8 @@ class ClassConfig(ABC):
             return [ClassConfig.from_dict(x, _first_recursion=False) for x in d]
         return d
 
-    def to_json(self):
-        return json.dumps(ClassConfig.to_dict(self))
+    def to_json(self, save_class=False):
+        return json.dumps(ClassConfig.to_dict(self, save_class))
 
     @staticmethod
     def from_json(s):

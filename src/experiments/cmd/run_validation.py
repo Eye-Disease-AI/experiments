@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 import ast
 import importlib
 import argparse
