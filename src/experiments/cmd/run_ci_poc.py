@@ -1,12 +1,9 @@
-# mypy: ignore-errors
-
-import sys
+import argparse
 
 import mlflow
 import numpy as np
 from scipy import stats
 from experiments.lib.mlflow_setup import Experiment
-from experiments.experiment import common_config
 from experiments.lib.reproducibility import get_trial_vals
 
 
@@ -61,11 +58,9 @@ def calculate_ci(
     return out
 
 
-def print_ci(vals, do_bootstrap_simulation=False):
+def print_ci(vals, metric_name, optuna_metric, do_bootstrap_simulation=False):
     ci = calculate_ci(vals, do_bootstrap_simulation)
-    marker = (
-        " (The optimized metric)" if metric_name == common_config.OPTUNA_METRIC else ""
-    )
+    marker = " (The optimized metric)" if metric_name == optuna_metric else ""
     rows = [
         ("Values:", f"{[f'{x:.4f}' for x in vals[:10]]}..."),
         ("Trials:", f"{ci['n']}"),
@@ -88,19 +83,34 @@ def print_ci(vals, do_bootstrap_simulation=False):
         print(f"{label:{w}}  {value}")
 
 
-if __name__ == "__main__":
-    STUDY_NAME = f"{common_config.EXPERIMENT_NAME}/lr-search5"
-    if len(sys.argv) > 1:
-        STUDY_NAME = sys.argv[1]
-    exp = Experiment(common_config.EXPERIMENT_NAME)
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--experiment_name", type=str)
+    parser.add_argument("--run_to_verify", type=str)
+    parser.add_argument("--optuna_metric", type=str)
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    assert args.experiment_name is not None, "experiment_name is required"
+    assert args.run_to_verify is not None, "run_to_verify is required"
+    assert args.optuna_metric is not None, "optuna_metric is required"
+
+    exp = Experiment(args.experiment_name)
     mlflow.set_tracking_uri("http://localhost:5000")
-    trial_metrics = get_trial_vals(exp, STUDY_NAME)
+    trial_metrics = get_trial_vals(exp, args.run_to_verify, only_parent_run=False)
 
     if not trial_metrics:
         print("No completed trials found.")
     else:
-        print(f"Optimized metric: {common_config.OPTUNA_METRIC}")
+        print(f"Optimized metric: {args.optuna_metric}")
         all_metric_names = sorted({k for m in trial_metrics for k in m})
         for metric_name in all_metric_names:
             vals = [m[metric_name] for m in trial_metrics if metric_name in m]
-            print_ci(vals)
+            print_ci(vals, metric_name, args.optuna_metric)
+
+
+if __name__ == "__main__":
+    main()
