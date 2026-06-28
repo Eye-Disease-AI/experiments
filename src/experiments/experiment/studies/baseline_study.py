@@ -153,6 +153,7 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         best_epoch: int,
         callbacks: list | None = None,
     ) -> tuple[L.Trainer, Any]:
+        global_seed_rng(self._config.seed)
         self._init_datamodules()
         self._datamodule.batch_size = best_params["batch_size"]
         self._datamodule.setup(stage="fit")
@@ -164,7 +165,6 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
             class_weights=self._datamodule.class_weights,
             n_classes=self._datamodule.n_classes,
         )
-        global_seed_rng(self._config.seed)
         best_model = model_config.build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
@@ -173,6 +173,7 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
             max_epochs=best_epoch + 1,
             callbacks=callbacks,
         )
+        global_seed_rng(self._config.seed)
         trainer.fit(best_model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(best_model, datamodule=self._datamodule)
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
@@ -188,6 +189,7 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         best_epoch: int,
         get_logger,
     ) -> Mapping[str, float]:
+        global_seed_rng(self._config.seed)
         self._init_datamodules()
 
         self._datamodule.batch_size = best_params["batch_size"]
@@ -202,13 +204,13 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
             class_weights=self._datamodule.class_weights,
             n_classes=self._datamodule.n_classes,
         )
-        global_seed_rng(self._config.seed)
         model = model_config.build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
             max_epochs=best_epoch + 1,
             callbacks=[],
         )
+        global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(model, datamodule=self._datamodule)
         return validation_metrics[0]
