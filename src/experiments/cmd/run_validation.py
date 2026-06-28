@@ -1,342 +1,278 @@
-# mypy: ignore-errors
+"""
+Description of what this entrypoint should achieve:
+It should perform some kind of verification. I can see that
+there are two modes:
 
-import ast
-import importlib
+* seeds with --num-seeds option
+* kfold with -K option
+
+It creates separete validation study with the first component
+matching the original name. Study is run as part of the same
+MLFlow experiment.
+
+1. We load best study params
+2. Set up data modules
+
+In the legacy code we set up Nuclear Cataract datamodule using
+the params, but now we are leaving decision about any needed modules to the
+study class. So either study class should expose publicly method for getting its
+datamodules OR we can consturct them ourselves based on the config OR we can
+move all validation logic to be part of study class.
+
+3. MLFlow orchestration
+4. Look for parameters with `best_` prefix in the selected study, start a run
+and log these values there
+5. Start nested run named `retrain` and do the actual training there using earlier
+loaded and logged best parameters
+6. Run either kfold or seeds validation based on CLI options. These modes also
+start nested runs and log parameters which are mode-specific and run names
+contain information about which seed or which fold was used
+"""
+
 import argparse
-import pkgutil
-import re
-from dataset.hard_policy import HardPolicy
-import mlflow
-import numpy as np
-import optuna
-
-from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
-from experiments.experiment.best_snapshot import BestSnapshotCallback
-from experiments.experiment import common_config
-from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
-    _SubsetTransformer,
-    NuclearCataractDataModule,
-)
-from experiments.experiment.objective import create_trainer
-from experiments.experiment.run_study import CONFIG_PARAMS
+import os
+from dataclasses import replace
+from tempfile import TemporaryDirectory
+from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
+from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
-from experiments.lib.reproducibility import get_git_sha, global_seed_rng
-import experiments.experiment.models
+import mlflow
+import mlflow.entities
+import optuna
+from typing_extensions import override
 
 
-def parse_logged(v):
-    """
-    TODO - rewrite
+class StudyValidator:
+    def __init__(
+        self,
+        experiment_name: str,
+        study_name: str,
+    ):
+        self.experiment_name = experiment_name
+        self.study_name = study_name
 
-    Do we need it?
-    Nope, we don't even use it anywhere.
-    """
-    try:
-        return ast.literal_eval(v)
-    except ValueError, SyntaxError:
-        return v
+    def _find_parent_run(self) -> mlflow.entities.Run | None:
+        client = Experiment().client
+        mlflow_exp = client.get_experiment_by_name(self.experiment_name)
+
+        if not mlflow_exp:
+            return None
+
+        for run in client.search_runs([mlflow_exp.experiment_id], max_results=9999):
+            if (
+                "optuna_study" in run.data.tags
+                and run.data.tags["optuna_study"] == self.study_name
+                and "mlflow.parentRunId" not in run.data.tags
+            ):
+                return run
+
+        return None
+
+    def _get_experiment_and_study(self):
+        exp = Experiment(self.experiment_name)
+        study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
+        return exp, study
+
+    def _find_best_params(self):
+        _, study = self._get_experiment_and_study()
+        if study is None:
+            return None
+        return study.best_params
+
+    def _recreate_study(self, seed: int | None = None):
+        exp = Experiment(self.experiment_name)
+        run = self._find_parent_run()
+        assert run is not None
+
+        with TemporaryDirectory() as tmp_dir:
+            config_file_path = exp.client.download_artifacts(
+                run.info.run_id, Study.MLFLOW_STUDY_CONFIG_FILE_PATH, tmp_dir
+            )
+            with open(config_file_path, "r") as config_tmp_file:
+                config_file_json = config_tmp_file.read()
+                class_config = ClassConfig.from_json(config_file_json)
+                if seed is not None:
+                    assert isinstance(class_config, StudyConfig)
+                    class_config = replace(class_config, seed=seed)
+                return class_config.build()
+
+    def _find_best_epoch(self):
+        exp = Experiment(self.experiment_name)
+        study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
+        _agg = min if study.direction == "min" else max
+        return _agg(
+            study.best_trial.intermediate_values,
+            key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
+        )  # type: ignore
+
+    def _post_retrain(
+        self, _best_params, _best_epoch, _study: Study, _validation_study_name
+    ):
+        pass
+
+    def _log_top_level(self, best_params, best_epoch, study):
+        mlflow.set_tag("study_name", self.study_name)
+        mlflow.set_tag("validator", self.__class__.__name__)
+        mlflow.log_params(best_params)
+        mlflow.log_param("seed", study.seed)
+        mlflow.log_metric("best_epoch", best_epoch)
+
+        exp, optuna_study = self._get_experiment_and_study()
+        if optuna_study is not None:
+            best_trial_run_id = optuna_study.best_trial.user_attrs.get("mlflow_run_id")
+            if best_trial_run_id:
+                best_run = exp.client.get_run(best_trial_run_id)
+                for k, v in best_run.data.metrics.items():
+                    if k.startswith("best_val_"):
+                        mlflow.log_metric(k, v)
+
+    def run(self):
+        validation_study_name = f"{self.study_name}/validation"
+        best_params = self._find_best_params()
+        best_epoch = self._find_best_epoch()
+        study = self._recreate_study()
+
+        with mlflow.start_run(run_name=validation_study_name):
+            self._log_top_level(best_params, best_epoch, study)
+            with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
+                study._retrain(
+                    get_logger=study._get_logger_func(
+                        retrain_run.info.run_id, mlflow.get_tracking_uri()
+                    ),
+                    best_params=best_params,
+                    best_epoch=best_epoch,
+                )
+            self._post_retrain(best_params, best_epoch, study, validation_study_name)
+
+    @staticmethod
+    def list_all_runs(parent_only=True):
+        client = Experiment().client
+        for experiment in client.search_experiments():
+            runs = client.search_runs([experiment.experiment_id], max_results=5000)
+            runs = filter(lambda run: "optuna_study" in run.data.tags, runs)
+
+            if parent_only:
+                runs = filter(
+                    lambda run: "mlflow.parentRunId" not in run.data.tags, runs
+                )
+
+            runs = list(runs)
+            if len(runs) > 0:
+                print(f"Experiment {experiment.name} runs:")
+                for run in runs:
+                    this_script_path = os.path.relpath(__file__)
+                    print(
+                        f"\tuv run {this_script_path} --experiment_name {experiment.name} --run_to_verify {run.data.tags['optuna_study']}"
+                    )
 
 
-def coerce_config(current, v):
-    """
-    TODO - rewrite
+class KFoldValidator(StudyValidator):
+    def __init__(
+        self,
+        experiment_name: str,
+        study_name: str,
+        k: int,
+    ):
+        super().__init__(experiment_name, study_name)
+        self.k = k
 
-    I don't think we need this anymore. We can load whole configs
-    from mlflow now. We do log json and we can then load it to
-    construct complete study config.
+    def _log_top_level(self, best_params, best_epoch, study):
+        super()._log_top_level(best_params, best_epoch, study)
+        mlflow.log_param("K", self.k)
 
+    @override
+    def _post_retrain(
+        self, best_params, best_epoch, study: Study, validation_study_name
+    ):
+        assert isinstance(study, KFoldValidatable)
 
-    current: The config value which we'd like to override,
-        in common_config
-    v: a string value of the config saved to mlflow which
-        we'd like to convert into the original type
+        results = []
 
-    mlflow saves all parameters as strings.
-    Need to parse them to their original types
-    """
-    # For string do nothing
-    if isinstance(current, str):
-        return v
-    # Most types can be interpreted using ast
-    elif isinstance(current, (int, float, list, dict, tuple)):
-        return ast.literal_eval(v)
-    # Classes need to have their name extracted and be imported
-    elif v.startswith("<class"):
-        class_re = re.compile(r"<class '([\w.]+)'>")
-        m = class_re.fullmatch(v)
-        if not m:
-            raise Exception(f"coerce_config: Failed to parse class: {v}")
-        mod, _, name = m.group(1).rpartition(".")
-        return getattr(importlib.import_module(mod), name)
-    else:
-        raise Exception("coerce_config: Unsupported type")
+        for i in range(self.k):
+            print(f"\n--- Fold {i + 1}/{self.k}")
+            with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
+                mlflow.set_tag("fold", i)
+                mlflow.set_tag("optuna_study", validation_study_name)
+                mlflow.set_tag("validation_sample", "true")
+                result = study.validate_fold(
+                    fold=i,
+                    num_folds=self.k,
+                    best_params=best_params,
+                    best_epoch=best_epoch,
+                    get_logger=study._get_logger_func(
+                        child_run.info.run_id, mlflow.get_tracking_uri()
+                    ),
+                )
+                results.append(result)
 
-
-def datamodule_change_subsets(
-    dm: NuclearCataractDataModule,
-    train_sub: NuclearCataractSubset,
-    val_sub: NuclearCataractSubset,
-):
-    """
-    TODO - rewrite
-
-    We are not guaranteed to have Nuclear Cataract datamodule anymore.
-    Moreover we can have multiple modules for a given study class, so
-    I think it could be the best that the study class implemented this logic.
-    """
-    dm.train_set = _SubsetTransformer(train_sub, transform=dm.transform)
-    dm.val_set = _SubsetTransformer(val_sub, transform=dm.val_transform)
-    dm.train_class_weights = train_sub.class_weights()
-    return dm
+        return results
 
 
-def train_and_validate(
-    ModelClass, dm: NuclearCataractDataModule, best_params, run, snapshot_prefix=None
-):
-    """
-    TODO - rewrite
+class SeedsValidator(StudyValidator):
+    def __init__(
+        self,
+        experiment_name: str,
+        study_name: str,
+        num_seeds: int,
+    ):
+        super().__init__(experiment_name, study_name)
+        self.num_seeds = num_seeds
 
-    Hmm... here again we depend on the fact we have one specific study.
-    So this is study specific too, so it should probably be in the study class.
-    I am thinking what if we divided studies into two kinds:
+    def _log_top_level(self, best_params, best_epoch, study):
+        super()._log_top_level(best_params, best_epoch, study)
+        mlflow.log_param("n_seeds", self.num_seeds)
 
-    * KFoldCValidatable
-    * SeedValidatable
+    @override
+    def _post_retrain(
+        self, best_params, best_epoch, _study: Study, validation_study_name
+    ):
+        results = []
+        seeds = list(range(self.num_seeds))
+        for i, s in enumerate(seeds):
+            print(f"\n--- Seed {s} ({i + 1}/{len(seeds)}) ---")
+            with mlflow.start_run(run_name=f"seed-{s}", nested=True) as seed_run:
+                mlflow.set_tag("seed", s)
+                mlflow.set_tag("optuna_study", validation_study_name)
+                mlflow.set_tag("validation_sample", "true")
+                study = self._recreate_study(s)
+                _, validation_metrics = study._retrain(
+                    get_logger=study._get_logger_func(
+                        seed_run.info.run_id, mlflow.get_tracking_uri()
+                    ),
+                    best_params=best_params,
+                    best_epoch=best_epoch,
+                )
+                results.append(validation_metrics)
 
-    and let child classes decide if they want to implement the required methods.
-    I don't know if Python has interfaces, but these could also be ABC or inherit
-    Study, which is ABC.
+        return results
 
-    Question: What is BestSnapshotCallback for?
-    """
-    params = {k: v for k, v in best_params.items() if k != "batch_size"}
-    model = ModelClass(
-        dm.dataset.n_classes, **params, class_weights=dm.train_class_weights
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--experiment_name", type=str)
+    parser.add_argument("--run_to_verify", type=str)
+    parser.add_argument(
+        "--mode", type=str, choices=["kfold", "seeds", "list"], default="list"
     )
-    if snapshot_prefix is not None:
-        best_cb = BestSnapshotCallback(snapshot_prefix)
-    else:
-        best_cb = BestSnapshotCallback()
-    trainer = create_trainer(
-        run,
-        max_epochs=common_config.EPOCHS,
-        precision=common_config.GPU_PRECISION,
-        callbacks=[best_cb],
-    )
-    trainer.fit(model, datamodule=dm)
-    return best_cb.best_metrics
-
-
-def summarize(results, name):
-    """
-    TODO - rewrite
-
-    This just prints some array statistics. I don't know the exact format of
-    the data that is used here. results[0] seem ot be the keys/names?
-    So results is probably dict with arrays as values and metrics as keys?
-    """
-    print(f"\n=== Summary across {len(results)} {name} ===")
-    for k in sorted(results[0]):
-        vals = np.array([r[k] for r in results])
-        print(
-            f"  {k}: mean={vals.mean():.4f}  std={vals.std():.4f}  "
-            f"min={vals.min():.4f}  max={vals.max():.4f}"
-        )
-
-
-def load_study_hparams(study):
-    """
-    TODO - rewrite
-
-    I think here we can just load params from the JSON that we
-    saved earlier. Just some logic to get that out of MLFLow
-    and it should work.
-    """
-    # Loading configs
-    logged_config = study.user_attrs.get("config") or {}
-    config_changed = {
-        k: (logged_config.get(k), CONFIG_PARAMS.get(k))
-        for k in set(logged_config) | set(CONFIG_PARAMS)
-        if logged_config.get(k) != CONFIG_PARAMS.get(k)
-    }
-    if config_changed:
-        print("WARNING: common_config changed since training:")
-        for k, (logged, current) in config_changed.items():
-            print(f"  {k}: logged={logged}  current={current}")
-    # Replace common_config values with the logged ones
-    # Required until we pass all hyperparameters instead of using globals
-    for k, v in logged_config.items():
-        if not hasattr(common_config, k):
-            continue
-        setattr(common_config, k, coerce_config(getattr(common_config, k), v))
-
-    ModelClass = getattr(experiments.experiment.models, study.user_attrs["model_class"])
-    best_params = study.best_params
-    _agg = min if common_config.OPTUNA_DIRECTION == "min" else max
-    best_epoch = _agg(
-        study.best_trial.intermediate_values,
-        key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
-    )  # type: ignore
-    hard_policy: str = str(study.user_attrs.get("hard_policy"))
-    print(
-        f"best_params={best_params} best_epoch={best_epoch} hard_policy={hard_policy}"
-    )
-    return ModelClass, best_params, best_epoch, hard_policy
-
-
-def run_kfold_validation(
-    ModelClass, dm, best_params, hard_policy, seed, validation_study_name, K
-):
-    """
-    TODO - rewrite
-
-    This just trains model with best params over all KFold splits nad logs
-    the results to MLFLow.
-    """
-    results = []
-    dataset = NuclearCataractDataset(
-        NuclearCataractDataset.KFoldCVMode(K),
-        cache_size=common_config.CACHE_SIZE,
-        hard_policy=HardPolicy[hard_policy],
-    )
-    for i in range(K):
-        train_sub = dataset.fold_train_set(i)
-        val_sub = dataset.fold_val_set(i)
-        print(f"\n--- Fold {i + 1}/{K}  train={len(train_sub)} val={len(val_sub)} ---")
-        with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
-            mlflow.set_tag("fold", i)
-            mlflow.set_tag("optuna_study", validation_study_name)
-            mlflow.set_tag("validation_sample", "true")
-            global_seed_rng(seed)
-            dm = datamodule_change_subsets(dm, train_sub, val_sub)
-            m = train_and_validate(ModelClass, dm, best_params, child_run)
-        results.append(m)
-    return results
-
-
-def run_seeds_validation(
-    ModelClass, dm, best_params, hard_policy, seed, validation_study_name, num_seeds
-):
-    """
-    TODO - rewrite
-
-    This does the same as run_kfold_validation, but what it changes are seeds and
-    not dataset splits.
-    """
-    results = []
-    dataset = NuclearCataractDataset(
-        NuclearCataractDataset.TrainValMode(0.8, 0.2),
-        cache_size=common_config.CACHE_SIZE,
-        hard_policy=HardPolicy[hard_policy],
-    )
-    train_sub = dataset.train_set()
-    val_sub = dataset.val_set()
-    seeds = list(range(num_seeds))
-    for i, s in enumerate(seeds):
-        print(f"\n--- Seed {s} ({i + 1}/{len(seeds)}) ---")
-        with mlflow.start_run(run_name=f"seed-{s}", nested=True) as child_run:
-            mlflow.set_tag("seed", s)
-            mlflow.set_tag("optuna_study", validation_study_name)
-            mlflow.set_tag("validation_sample", "true")
-            global_seed_rng(s)
-            dm = datamodule_change_subsets(dm, train_sub, val_sub)
-            m = train_and_validate(ModelClass, dm, best_params, child_run)
-        results.append(m)
-    return results
+    parser.add_argument("-K", type=int, default=5)
+    parser.add_argument("--num_seeds", type=int, default=10)
+    return parser.parse_args()
 
 
 def main():
-    """
-    TODO - retrain
+    args = parse_args()
 
-    This defines CLI that:
-
-    * saves best params to a new validation study
-    * retrains the model using best parameters
-    * trains the model in either Kfoldcv or Seeds mode and logs the results
-    """
-
-    for _, _name, _ in pkgutil.iter_modules(experiments.experiment.models.__path__):
-        importlib.import_module(f"experiments.experiment.models.{_name}")
-    SHA = get_git_sha()
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("study_to_verify", type=str)
-    parser.add_argument("--mode", type=str, choices=["kfold", "seeds"], default="kfold")
-    parser.add_argument("-K", type=int, default=5)
-    parser.add_argument("--num_seeds", type=int, default=10)
-    args = parser.parse_args()
-    validation_study_name = f"{args.study_to_verify}/validation_{args.mode}_" + SHA
-
-    exp = Experiment(common_config.EXPERIMENT_NAME)
-    study = optuna.load_study(study_name=args.study_to_verify, storage=exp.storage)
-
-    ModelClass, best_params, best_epoch, hard_policy = load_study_hparams(study)
-
-    # Training init
-    seed = global_seed_rng(common_config.SEED)
-    datamodule = NuclearCataractDataModule(
-        seed, batch_size=best_params["batch_size"], hard_policy=HardPolicy[hard_policy]
-    )
-    datamodule.setup(stage="fit")
-
-    with mlflow.start_run(run_name=validation_study_name):
-        mlflow.set_tag("study_name", args.study_to_verify)
-        mlflow.set_tag("model_class", ModelClass.__name__)
-        mlflow.set_tag("mode", args.mode)
-        mlflow.log_params(
-            {
-                **best_params,
-                "hard_policy": hard_policy,
-                "seed": common_config.SEED,
-                **(
-                    {"K": args.K}
-                    if args.mode == "kfold"
-                    else {"n_seeds": args.num_seeds}
-                ),
-            }
-        )
-        mlflow.log_metric("best_epoch", best_epoch)
-        best_trial_run_id = study.best_trial.user_attrs.get("mlflow_run_id")
-        if best_trial_run_id:
-            best_run = exp.client.get_run(best_trial_run_id)
-            for k, v in best_run.data.metrics.items():
-                if k.startswith("best_val_"):
-                    mlflow.log_metric(k, v)
-
-        with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
-            mlflow.set_tag("optuna_study", validation_study_name)
-            train_and_validate(
-                ModelClass,
-                datamodule,
-                best_params,
-                retrain_run,
-                snapshot_prefix="retrain_",
+    match args.mode:
+        case "list":
+            StudyValidator.list_all_runs()
+        case "kfold":
+            validator = KFoldValidator(args.experiment_name, args.run_to_verify, args.K)
+            validator.run()
+        case "seeds":
+            validator = SeedsValidator(
+                args.experiment_name, args.run_to_verify, args.num_seeds
             )
-
-        if args.mode == "kfold":
-            results = run_kfold_validation(
-                ModelClass,
-                datamodule,
-                best_params,
-                hard_policy,
-                seed,
-                validation_study_name,
-                args.K,
-            )
-        elif args.mode == "seeds":
-            results = run_seeds_validation(
-                ModelClass,
-                datamodule,
-                best_params,
-                hard_policy,
-                seed,
-                validation_study_name,
-                args.num_seeds,
-            )
-        else:
-            raise ValueError(f"unknown MODE: {args.mode}")
-        summarize(results, args.mode)
+            validator.run()
 
 
 if __name__ == "__main__":

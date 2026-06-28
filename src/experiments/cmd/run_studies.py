@@ -9,7 +9,7 @@ from experiments.experiment.studies.baseline_study import BaselineStudyConfig
 
 
 def main():
-    EXPERIMENT_NAME = "baseline-hard-policy-test-debug"
+    EXPERIMENT_NAME = "baseline-hard-policy-test-debug-5"
 
     STUDIES: list[StudyConfig] = [
         BaselineStudyConfig(
@@ -17,24 +17,8 @@ def main():
             datamodule_config=NuclearCataractDataModuleConfig(
                 hard_policy=HardPolicy.DOMINATE,
             ),
-        ),
-        BaselineStudyConfig(
-            experiment_name=EXPERIMENT_NAME + "_no_hard",
-            datamodule_config=NuclearCataractDataModuleConfig(
-                hard_policy=HardPolicy.NO_HARD,
-            ),
-        ),
-        BaselineStudyConfig(
-            experiment_name=EXPERIMENT_NAME + "_only_hard",
-            datamodule_config=NuclearCataractDataModuleConfig(
-                hard_policy=HardPolicy.ONLY_HARD,
-            ),
-        ),
-        BaselineStudyConfig(
-            experiment_name=EXPERIMENT_NAME + "_passthrough",
-            datamodule_config=NuclearCataractDataModuleConfig(
-                hard_policy=HardPolicy.PASSTHROUGH,
-            ),
+            max_epochs=3,
+            max_trials=2,
         ),
     ]
 

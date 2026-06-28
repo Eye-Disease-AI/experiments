@@ -11,7 +11,7 @@ from experiments.experiment.studies.baseline_study import (
 )
 from experiments.cmd.ci_poc import get_trial_vals
 
-EXPERIMENT_NAME = "sanity-check-debug1235"
+EXPERIMENT_NAME = "sanity-check-debug1236"
 study_config = BaselineStudyConfig(
     max_epochs=1,
     max_trials=1,
