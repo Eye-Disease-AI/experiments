@@ -68,9 +68,15 @@ class StudyValidator:
 
         return None
 
-    def _find_best_params(self):
+    def _get_experiment_and_study(self):
         exp = Experiment(self.experiment_name)
         study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
+        return exp, study
+
+    def _find_best_params(self):
+        _, study = self._get_experiment_and_study()
+        if study is None:
+            return None
         return study.best_params
 
     def _recreate_study(self, seed: int | None = None):
@@ -104,11 +110,21 @@ class StudyValidator:
     ):
         pass
 
-    def _log_top_level(self, best_params, study):
+    def _log_top_level(self, best_params, best_epoch, study):
         mlflow.set_tag("study_name", self.study_name)
         mlflow.set_tag("validator", self.__class__.__name__)
         mlflow.log_params(best_params)
         mlflow.log_param("seed", study.seed)
+        mlflow.log_metric("best_epoch", best_epoch)
+
+        exp, optuna_study = self._get_experiment_and_study()
+        if optuna_study is not None:
+            best_trial_run_id = optuna_study.best_trial.user_attrs.get("mlflow_run_id")
+            if best_trial_run_id:
+                best_run = exp.client.get_run(best_trial_run_id)
+                for k, v in best_run.data.metrics.items():
+                    if k.startswith("best_val_"):
+                        mlflow.log_metric(k, v)
 
     def run(self):
         validation_study_name = f"{self.study_name}/validation"
@@ -117,7 +133,7 @@ class StudyValidator:
         study = self._recreate_study()
 
         with mlflow.start_run(run_name=validation_study_name):
-            self._log_top_level(best_params, study)
+            self._log_top_level(best_params, best_epoch, study)
             with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
                 study._retrain(
                     get_logger=study._get_logger_func(
@@ -158,8 +174,8 @@ class KFoldValidator(StudyValidator):
         super().__init__(experiment_name, study_name)
         self.k = k
 
-    def _log_top_level(self, best_params, study):
-        super()._log_top_level(best_params, study)
+    def _log_top_level(self, best_params, best_epoch, study):
+        super()._log_top_level(best_params, best_epoch, study)
         mlflow.log_param("K", self.k)
 
     @override
@@ -200,8 +216,8 @@ class SeedsValidator(StudyValidator):
         super().__init__(experiment_name, study_name)
         self.num_seeds = num_seeds
 
-    def _log_top_level(self, best_params, study):
-        super()._log_top_level(best_params, study)
+    def _log_top_level(self, best_params, best_epoch, study):
+        super()._log_top_level(best_params, best_epoch, study)
         mlflow.log_param("n_seeds", self.num_seeds)
 
     @override
