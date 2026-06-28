@@ -149,12 +149,14 @@ class StudyValidator:
         client = Experiment().client
         for experiment in client.search_experiments():
             runs = client.search_runs([experiment.experiment_id], max_results=5000)
+            runs = filter(lambda run: "optuna_study" in run.data.tags, runs)
 
             if parent_only:
-                runs = [
-                    run for run in runs if "mlflow.parentRunId" not in run.data.tags
-                ]
+                runs = filter(
+                    lambda run: "mlflow.parentRunId" not in run.data.tags, runs
+                )
 
+            runs = list(runs)
             if len(runs) > 0:
                 print(f"Experiment {experiment.name} runs:")
                 for run in runs:
