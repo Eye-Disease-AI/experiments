@@ -1,4 +1,5 @@
 from abc import ABC
+from enum import Enum
 import importlib
 from importlib.metadata import PackagePath
 from typing import Any
@@ -37,6 +38,9 @@ class ClassConfig(ABC):
             return d
         if isinstance(self, (list, tuple)):
             return [ClassConfig.to_dict(x, save_class) for x in self]
+
+        if isinstance(self, Enum):
+            return {"__enum__": serialize_class(type(self)), "value": self.value}
         return self
 
     @staticmethod
@@ -81,6 +85,9 @@ class ClassConfig(ABC):
 
         if isinstance(d, (list, tuple)):
             return [ClassConfig.from_dict(x, _first_recursion=False) for x in d]
+
+        if isinstance(d, dict) and "__enum__" in d:
+            return deserialize_class(d["__enum__"])(d["value"])
         return d
 
     def to_json(self, save_class=False):
