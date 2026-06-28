@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Literal, TypedDict, override
 
@@ -8,6 +9,7 @@ import optuna
 from lightning.pytorch.callbacks import EarlyStopping
 
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
+    NuclearCataractDataModule,
     NuclearCataractDataModuleConfig,
 )
 from experiments.experiment.models.convnext import ConvNextConfig
@@ -15,7 +17,7 @@ from experiments.experiment.callbacks import (
     BackboneFreezeCallback,
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
-from experiments.experiment.studies.study import Study, StudyConfig
+from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
 from experiments.lib.reproducibility import global_seed_rng
 
 
@@ -52,7 +54,7 @@ class OptunaParams(TypedDict):
     batch_size: int
 
 
-class BaselineStudy(Study[OptunaParams]):
+class BaselineStudy(Study[OptunaParams], KFoldValidatable):
     _config: BaselineStudyConfig
 
     def __init__(
@@ -73,7 +75,9 @@ class BaselineStudy(Study[OptunaParams]):
 
     @override
     def _init_datamodules(self) -> list[DataModule]:
-        self._datamodule: DataModule = self._config.datamodule_config.build()
+        self._datamodule: NuclearCataractDataModule = (
+            self._config.datamodule_config.build()
+        )
         return [self._datamodule]
 
     @override
@@ -116,7 +120,7 @@ class BaselineStudy(Study[OptunaParams]):
             enable_model_summary=False,
             enable_checkpointing=False,
             log_every_n_steps=1,
-            precision=self._config.gpu_precision,
+            precision=self._config.gpu_precision,  # type: ignore
             deterministic=True,
         )
 
@@ -171,3 +175,37 @@ class BaselineStudy(Study[OptunaParams]):
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
         mlflow.log_metric(f"retrain_{self._config.optuna_metric}", retrain_metric)
         return trainer, validation_metrics
+
+    def validate_fold(
+        self,
+        *,
+        fold: int,
+        num_folds: int,
+        best_params: dict,
+        best_epoch: int,
+        get_logger,
+    ) -> Mapping[str, float]:
+        self._init_datamodules()
+
+        self._datamodule.batch_size = best_params["batch_size"]
+        self._datamodule.setup(stage="fit")
+        self._datamodule.setup_fold(fold, num_folds)
+
+        model_config = replace(
+            self._config.model_config,
+            learning_rate=best_params["lr"],
+            weight_decay=best_params["weight_decay"],
+            dropout=best_params["dropout"],
+            class_weights=self._datamodule.class_weights,
+            n_classes=self._datamodule.n_classes,
+        )
+        model = model_config.build()
+        trainer = self.create_trainer(
+            logger=get_logger(self._config.model_config.class_name()),
+            max_epochs=best_epoch + 1,
+            callbacks=[],
+        )
+        global_seed_rng(self._config.seed)
+        trainer.fit(model, datamodule=self._datamodule)
+        validation_metrics = trainer.validate(model, datamodule=self._datamodule)
+        return validation_metrics[0]

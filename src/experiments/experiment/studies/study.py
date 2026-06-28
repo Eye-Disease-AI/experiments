@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import os
 import tempfile
-from typing import Any, Literal, override
+from typing import Any, Literal, Protocol, override, runtime_checkable
 import lightning as L
 from matplotlib import pyplot as plt
 from optuna.visualization import plot_optimization_history, plot_param_importances
@@ -268,3 +268,16 @@ class Study[OptunaParams: Mapping[str, Any]](ABC):
             return mlflow_experiment, optuna_study, parent_run, True
 
         return mlflow_experiment, optuna_study, parent_run, False
+
+
+@runtime_checkable
+class KFoldValidatable(Protocol):
+    def validate_fold(
+        self,
+        *,
+        fold: int,
+        num_folds: int,
+        best_params: dict,
+        best_epoch: int,
+        get_logger,
+    ) -> Mapping[str, float]: ...

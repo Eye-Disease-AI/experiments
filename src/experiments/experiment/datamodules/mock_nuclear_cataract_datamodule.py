@@ -68,14 +68,17 @@ class MockNuclearCataractDataModule(DataModule):
     def setup(self: DataModule, stage: str | None = None) -> None:
         pass
 
+    def setup_fold(self, _fold: int, _num_folds: int) -> None:
+        pass
+
     @override
-    def train_dataloader(self: DataModule) -> DataLoader:
+    def train_dataloader(self) -> DataLoader:
         return DataLoader(MockNuclearCataractDataset(self._config), shuffle=True)
 
     @override
-    def val_dataloader(self: DataModule) -> DataLoader:
+    def val_dataloader(self) -> DataLoader:
         return DataLoader(MockNuclearCataractDataset(self._config))
 
     @override
-    def test_dataloader(self: DataModule) -> DataLoader:
+    def test_dataloader(self) -> DataLoader:
         return DataLoader(MockNuclearCataractDataset(self._config))

@@ -57,18 +57,20 @@ class NuclearCataractDataModule(DataModule):
         self.train_class_weights = None
         self._batch_size = self._config.batch_size
 
-    @override
-    def setup(self, stage: str | None = None):
-        max_angle = self._config.augment_rot_angle
-        max_rad = math.radians(max_angle)
-        pre_rot_size = int(
+    def _cache_size(self) -> int | None:
+        if not self._config.cache:
+            return None
+        max_rad = math.radians(self._config.augment_rot_angle)
+        return int(
             math.ceil(self._config.image_size * (math.sin(max_rad) + math.cos(max_rad)))
         )
 
+    @override
+    def setup(self, stage: str | None = None):
         if not hasattr(self, "dataset"):
             self.dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
-                pre_rot_size if self._config.cache else None,
+                self._cache_size(),
                 self._config.return_paths,
                 hard_policy=self._config.hard_policy,
             )
@@ -76,7 +78,7 @@ class NuclearCataractDataModule(DataModule):
         if not hasattr(self, "test_dataset"):
             self.test_dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TestMode(),
-                pre_rot_size if self._config.cache else None,
+                self._cache_size(),
                 self._config.return_paths,
                 hard_policy=self._config.hard_policy,
             )
@@ -122,6 +124,19 @@ class NuclearCataractDataModule(DataModule):
             dataset, batch_size=self._batch_size, num_workers=0, pin_memory=True
         )
 
+    def setup_fold(self, fold: int, num_folds: int) -> None:
+        self.dataset = NuclearCataractDataset(
+            NuclearCataractDataset.KFoldCVMode(num_folds),
+            self._cache_size(),
+            self._config.return_paths,
+            hard_policy=self._config.hard_policy,
+        )
+        train = self.dataset.fold_train_set(fold)
+        val = self.dataset.fold_val_set(fold)
+        self.train_class_weights = train.class_weights()
+        self.train_set = _SubsetTransformer(train, transform=self.transform)
+        self.val_set = _SubsetTransformer(val, transform=self.val_transform)
+
     @override
     def train_dataloader(self):
         return self.dataLoaderCommon(self.train_set)
@@ -149,6 +164,11 @@ class NuclearCataractDataModule(DataModule):
     def class_names(self) -> list[str]:
         idx_to_label = {v: k for k, v in self.dataset.label_to_idx.items()}
         return [idx_to_label[i] for i in range(len(idx_to_label))]
+
+    @override
+    @property
+    def class_weights(self) -> torch.Tensor | None:
+        return self.train_class_weights
 
     @override
     @property

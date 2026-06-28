@@ -32,12 +32,13 @@ contain information about which seed or which fold was used
 import argparse
 import os
 from tempfile import TemporaryDirectory
-from experiments.experiment.studies.study import Study
+from experiments.experiment.studies.study import KFoldValidatable, Study
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
 import mlflow
 import mlflow.entities
 import optuna
+from typing_extensions import override
 
 
 class StudyValidator:
@@ -58,7 +59,8 @@ class StudyValidator:
 
         for run in client.search_runs([mlflow_exp.experiment_id], max_results=9999):
             if (
-                run.data.tags["optuna_study"] == self.study_name
+                "optuna_study" in run.data.tags
+                and run.data.tags["optuna_study"] == self.study_name
                 and "mlflow.parentRunId" not in run.data.tags
             ):
                 return run
@@ -93,7 +95,12 @@ class StudyValidator:
             key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
         )  # type: ignore
 
-    def _run_validation(self):
+    def _post_retrain(
+        self, _best_params, _best_epoch, _study: Study, _validation_study_name
+    ):
+        pass
+
+    def run(self):
         validation_study_name = f"{self.study_name}/validation"
         best_params = self._find_best_params()
         best_epoch = self._find_best_epoch()
@@ -108,6 +115,7 @@ class StudyValidator:
                     best_params=best_params,
                     best_epoch=best_epoch,
                 )
+            self._post_retrain(best_params, best_epoch, study, validation_study_name)
 
     @staticmethod
     def list_all_runs(parent_only=True):
@@ -129,9 +137,42 @@ class StudyValidator:
                     )
 
 
-class KFoldValidator:
-    def __init__(self, k: int):
-        pass
+class KFoldValidator(StudyValidator):
+    def __init__(
+        self,
+        experiment_name: str,
+        study_name: str,
+        k: int,
+    ):
+        super().__init__(experiment_name, study_name)
+        self.k = k
+
+    @override
+    def _post_retrain(
+        self, best_params, best_epoch, study: Study, validation_study_name
+    ):
+        assert isinstance(study, KFoldValidatable)
+
+        results = []
+
+        for i in range(self.k):
+            print(f"\n--- Fold {i + 1}/{self.k}")
+            with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
+                mlflow.set_tag("fold", i)
+                mlflow.set_tag("optuna_study", validation_study_name)
+                mlflow.set_tag("validation_sample", "true")
+                result = study.validate_fold(
+                    fold=i,
+                    num_folds=self.k,
+                    best_params=best_params,
+                    best_epoch=best_epoch,
+                    get_logger=study._get_logger_func(
+                        child_run.info.run_id, mlflow.get_tracking_uri()
+                    ),
+                )
+                results.append(result)
+
+        return results
 
 
 class SeedsValidator:
@@ -157,9 +198,9 @@ def main():
     match args.mode:
         case "list":
             StudyValidator.list_all_runs()
-        case "kfold" | "seeds":
-            validator = StudyValidator(args.experiment_name, args.run_to_verify)
-            validator._run_validation()
+        case "kfold":
+            validator = KFoldValidator(args.experiment_name, args.run_to_verify, args.K)
+            validator.run()
 
 
 if __name__ == "__main__":
