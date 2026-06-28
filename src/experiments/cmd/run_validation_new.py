@@ -31,8 +31,9 @@ contain information about which seed or which fold was used
 
 import argparse
 import os
+from dataclasses import replace
 from tempfile import TemporaryDirectory
-from experiments.experiment.studies.study import KFoldValidatable, Study
+from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
 import mlflow
@@ -72,7 +73,7 @@ class StudyValidator:
         study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
         return study.best_params
 
-    def _recreate_study(self):
+    def _recreate_study(self, seed: int | None = None):
         exp = Experiment(self.experiment_name)
         run = self._find_parent_run()
         assert run is not None
@@ -84,6 +85,9 @@ class StudyValidator:
             with open(config_file_path, "r") as config_tmp_file:
                 config_file_json = config_tmp_file.read()
                 class_config = ClassConfig.from_json(config_file_json)
+                if seed is not None:
+                    assert isinstance(class_config, StudyConfig)
+                    class_config = replace(class_config, seed=seed)
                 return class_config.build()
 
     def _find_best_epoch(self):
@@ -175,9 +179,39 @@ class KFoldValidator(StudyValidator):
         return results
 
 
-class SeedsValidator:
-    def __init__(self, num_seeds: int):
-        pass
+class SeedsValidator(StudyValidator):
+    def __init__(
+        self,
+        experiment_name: str,
+        study_name: str,
+        num_seeds: int,
+    ):
+        super().__init__(experiment_name, study_name)
+        self.num_seeds = num_seeds
+
+    @override
+    def _post_retrain(
+        self, best_params, best_epoch, _study: Study, validation_study_name
+    ):
+        results = []
+        seeds = list(range(self.num_seeds))
+        for i, s in enumerate(seeds):
+            print(f"\n--- Seed {s} ({i + 1}/{len(seeds)}) ---")
+            with mlflow.start_run(run_name=f"seed-{s}", nested=True) as seed_run:
+                mlflow.set_tag("seed", s)
+                mlflow.set_tag("optuna_study", validation_study_name)
+                mlflow.set_tag("validation_sample", "true")
+                study = self._recreate_study(s)
+                _, validation_metrics = study._retrain(
+                    get_logger=study._get_logger_func(
+                        seed_run.info.run_id, mlflow.get_tracking_uri()
+                    ),
+                    best_params=best_params,
+                    best_epoch=best_epoch,
+                )
+                results.append(validation_metrics)
+
+        return results
 
 
 def parse_args():
@@ -200,6 +234,11 @@ def main():
             StudyValidator.list_all_runs()
         case "kfold":
             validator = KFoldValidator(args.experiment_name, args.run_to_verify, args.K)
+            validator.run()
+        case "seeds":
+            validator = SeedsValidator(
+                args.experiment_name, args.run_to_verify, args.num_seeds
+            )
             validator.run()
 
 

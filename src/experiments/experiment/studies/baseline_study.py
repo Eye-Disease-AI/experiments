@@ -91,8 +91,9 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         self,
         logger,
         max_epochs: int | None = None,
-        callbacks: list[L.Callback] = [],
+        callbacks: list[L.Callback] | None = None,
     ):
+        callbacks = list(callbacks or [])
         if self._config.use_early_stopping:
             callbacks.append(
                 EarlyStopping(
@@ -125,7 +126,9 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         )
 
     @override
-    def _train(self, params: OptunaParams, get_logger, callbacks: list = []) -> None:
+    def _train(
+        self, params: OptunaParams, get_logger, callbacks: list | None = None
+    ) -> None:
         model_config = replace(
             self._config.model_config,
             learning_rate=params["lr"],
@@ -148,7 +151,7 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         get_logger,
         best_params: dict,
         best_epoch: int,
-        callbacks: list = [],
+        callbacks: list | None = None,
     ) -> tuple[L.Trainer, Any]:
         self._init_datamodules()
         self._datamodule.batch_size = best_params["batch_size"]
@@ -161,6 +164,7 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
             class_weights=self._datamodule.class_weights,
             n_classes=self._datamodule.n_classes,
         )
+        global_seed_rng(self._config.seed)
         best_model = model_config.build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
@@ -169,7 +173,6 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
             max_epochs=best_epoch + 1,
             callbacks=callbacks,
         )
-        global_seed_rng(self._config.seed)
         trainer.fit(best_model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(best_model, datamodule=self._datamodule)
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
@@ -199,13 +202,13 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
             class_weights=self._datamodule.class_weights,
             n_classes=self._datamodule.n_classes,
         )
+        global_seed_rng(self._config.seed)
         model = model_config.build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
             max_epochs=best_epoch + 1,
             callbacks=[],
         )
-        global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(model, datamodule=self._datamodule)
         return validation_metrics[0]
