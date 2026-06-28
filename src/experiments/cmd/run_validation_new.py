@@ -68,10 +68,12 @@ class StudyValidator:
     def _find_best_params(self):
         exp = Experiment(self.experiment_name)
         study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
-        run = self._find_parent_run()
+        return study.best_params
 
+    def _recreate_study(self):
+        exp = Experiment(self.experiment_name)
+        run = self._find_parent_run()
         assert run is not None
-        print(exp.client.list_artifacts(run.info.run_id))
 
         with TemporaryDirectory() as tmp_dir:
             config_file_path = exp.client.download_artifacts(
@@ -79,9 +81,33 @@ class StudyValidator:
             )
             with open(config_file_path, "r") as config_tmp_file:
                 config_file_json = config_tmp_file.read()
-                print(ClassConfig.from_json(config_file_json))
+                class_config = ClassConfig.from_json(config_file_json)
+                return class_config.build()
 
-        print(study.best_params)
+    def _find_best_epoch(self):
+        exp = Experiment(self.experiment_name)
+        study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
+        _agg = min if study.direction == "min" else max
+        return _agg(
+            study.best_trial.intermediate_values,
+            key=study.best_trial.intermediate_values.get,  # pyright: ignore[reportArgumentType]
+        )  # type: ignore
+
+    def _run_validation(self):
+        validation_study_name = f"{self.study_name}/validation"
+        best_params = self._find_best_params()
+        best_epoch = self._find_best_epoch()
+        study = self._recreate_study()
+
+        with mlflow.start_run(run_name=validation_study_name):
+            with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
+                study._retrain(
+                    get_logger=study._get_logger_func(
+                        retrain_run.info.run_id, mlflow.get_tracking_uri()
+                    ),
+                    best_params=best_params,
+                    best_epoch=best_epoch,
+                )
 
     @staticmethod
     def list_all_runs(parent_only=True):
@@ -133,7 +159,7 @@ def main():
             StudyValidator.list_all_runs()
         case "kfold" | "seeds":
             validator = StudyValidator(args.experiment_name, args.run_to_verify)
-            print(validator._find_best_params())
+            validator._run_validation()
 
 
 if __name__ == "__main__":

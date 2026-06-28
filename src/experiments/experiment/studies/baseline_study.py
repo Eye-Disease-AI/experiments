@@ -146,6 +146,7 @@ class BaselineStudy(Study[OptunaParams]):
         best_epoch: int,
         callbacks: list = [],
     ) -> tuple[L.Trainer, Any]:
+        self._init_datamodules()
         self._datamodule.batch_size = best_params["batch_size"]
         self._datamodule.setup(stage="fit")
         model_config = replace(

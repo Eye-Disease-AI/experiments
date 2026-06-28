@@ -87,8 +87,10 @@ class ClassConfig(ABC):
         return json.dumps(ClassConfig.to_dict(self, save_class))
 
     @staticmethod
-    def from_json(s):
-        return ClassConfig.from_dict(json.loads(s))
+    def from_json(s) -> ClassConfig:
+        c = ClassConfig.from_dict(json.loads(s))
+        assert isinstance(c, ClassConfig)
+        return c
 
 
 def deserialize_class(path: str | None) -> Any:
