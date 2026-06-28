@@ -104,6 +104,12 @@ class StudyValidator:
     ):
         pass
 
+    def _log_top_level(self, best_params, study):
+        mlflow.set_tag("study_name", self.study_name)
+        mlflow.set_tag("validator", self.__class__.__name__)
+        mlflow.log_params(best_params)
+        mlflow.log_param("seed", study.seed)
+
     def run(self):
         validation_study_name = f"{self.study_name}/validation"
         best_params = self._find_best_params()
@@ -111,6 +117,7 @@ class StudyValidator:
         study = self._recreate_study()
 
         with mlflow.start_run(run_name=validation_study_name):
+            self._log_top_level(best_params, study)
             with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
                 study._retrain(
                     get_logger=study._get_logger_func(
@@ -151,6 +158,10 @@ class KFoldValidator(StudyValidator):
         super().__init__(experiment_name, study_name)
         self.k = k
 
+    def _log_top_level(self, best_params, study):
+        super()._log_top_level(best_params, study)
+        mlflow.log_param("K", self.k)
+
     @override
     def _post_retrain(
         self, best_params, best_epoch, study: Study, validation_study_name
@@ -188,6 +199,10 @@ class SeedsValidator(StudyValidator):
     ):
         super().__init__(experiment_name, study_name)
         self.num_seeds = num_seeds
+
+    def _log_top_level(self, best_params, study):
+        super()._log_top_level(best_params, study)
+        mlflow.log_param("n_seeds", self.num_seeds)
 
     @override
     def _post_retrain(

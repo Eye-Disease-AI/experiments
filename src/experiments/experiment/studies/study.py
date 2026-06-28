@@ -52,6 +52,10 @@ class Study[OptunaParams: Mapping[str, Any]](ABC):
         self.name = f"{config.experiment_name}_{get_git_sha()}"
         stop_logs()
 
+    @property
+    def seed(self) -> int:
+        return self._config.seed
+
     @abstractmethod
     def _suggest_params(self, trial: optuna.Trial) -> OptunaParams: ...
 
