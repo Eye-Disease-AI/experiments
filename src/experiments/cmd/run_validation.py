@@ -15,10 +15,10 @@ class StudyValidator:
     def __init__(
         self,
         experiment_name: str,
-        study_name: str,
+        run_to_validate: str,
     ):
         self.experiment_name = experiment_name
-        self.study_name = study_name
+        self.run_to_validate = run_to_validate
         self.experiment = Experiment(self.experiment_name)
 
     def _find_parent_run(self) -> mlflow.entities.Run | None:
@@ -29,7 +29,7 @@ class StudyValidator:
         ):
             if (
                 "optuna_study" in run.data.tags
-                and run.data.tags["optuna_study"] == self.study_name
+                and run.data.tags["optuna_study"] == self.run_to_validate
                 and "mlflow.parentRunId" not in run.data.tags
             ):
                 return run
@@ -38,7 +38,7 @@ class StudyValidator:
 
     def _get_study(self):
         return optuna.load_study(
-            study_name=self.study_name, storage=self.experiment.storage
+            study_name=self.run_to_validate, storage=self.experiment.storage
         )
 
     def _find_best_params(self):
@@ -74,7 +74,7 @@ class StudyValidator:
         pass
 
     def _log_top_level(self, best_params, best_epoch, study):
-        mlflow.set_tag("study_name", self.study_name)
+        mlflow.set_tag("validated_run_name", self.run_to_validate)
         mlflow.set_tag("validator", self.__class__.__name__)
         mlflow.log_params(best_params)
         mlflow.log_param("seed", study.seed)
@@ -90,13 +90,13 @@ class StudyValidator:
                         mlflow.log_metric(k, v)
 
     def run(self):
-        validation_study_name = f"{self.study_name}/validation"
+        validation_run_name = f"{self.run_to_validate}/validation"
         best_params = self._find_best_params()
         best_epoch = self._find_best_epoch()
         study_config = self._get_study_config()
         study = study_config.build()
 
-        with mlflow.start_run(run_name=validation_study_name):
+        with mlflow.start_run(run_name=validation_run_name):
             self._log_top_level(best_params, best_epoch, study)
             with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
                 study._retrain(
@@ -106,7 +106,7 @@ class StudyValidator:
                     best_params=best_params,
                     best_epoch=best_epoch,
                 )
-            self._post_retrain(best_params, best_epoch, study, validation_study_name)
+            self._post_retrain(best_params, best_epoch, study, validation_run_name)
 
     @staticmethod
     def list_all_runs(parent_only=True):
@@ -126,7 +126,7 @@ class StudyValidator:
                 for run in runs:
                     this_script_path = os.path.relpath(__file__)
                     print(
-                        f"\tuv run {this_script_path} --experiment_name {experiment.name} --run_to_verify {run.data.tags['optuna_study']}"
+                        f"\tuv run {this_script_path} --experiment_name {experiment.name} --run_to_validate {run.data.tags['optuna_study']}"
                     )
 
 
@@ -134,10 +134,10 @@ class KFoldValidator(StudyValidator):
     def __init__(
         self,
         experiment_name: str,
-        study_name: str,
+        run_to_validate: str,
         k: int,
     ):
-        super().__init__(experiment_name, study_name)
+        super().__init__(experiment_name, run_to_validate)
         self.k = k
 
     def _log_top_level(self, best_params, best_epoch, study):
@@ -145,9 +145,7 @@ class KFoldValidator(StudyValidator):
         mlflow.log_param("K", self.k)
 
     @override
-    def _post_retrain(
-        self, best_params, best_epoch, study: Study, validation_study_name
-    ):
+    def _post_retrain(self, best_params, best_epoch, study: Study, validation_run_name):
         assert isinstance(study, KFoldValidatable)
 
         results = []
@@ -156,7 +154,7 @@ class KFoldValidator(StudyValidator):
             print(f"\n--- Fold {i + 1}/{self.k}")
             with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
                 mlflow.set_tag("fold", i)
-                mlflow.set_tag("optuna_study", validation_study_name)
+                mlflow.set_tag("optuna_study", validation_run_name)
                 mlflow.set_tag("validation_sample", "true")
                 result = study.validate_fold(
                     fold=i,
@@ -188,7 +186,7 @@ class SeedsValidator(StudyValidator):
 
     @override
     def _post_retrain(
-        self, best_params, best_epoch, _study: Study, validation_study_name
+        self, best_params, best_epoch, _study: Study, validation_run_name
     ):
         results = []
         seeds = list(range(self.num_seeds))
@@ -196,7 +194,7 @@ class SeedsValidator(StudyValidator):
             print(f"\n--- Seed {s} ({i + 1}/{len(seeds)}) ---")
             with mlflow.start_run(run_name=f"seed-{s}", nested=True) as seed_run:
                 mlflow.set_tag("seed", s)
-                mlflow.set_tag("optuna_study", validation_study_name)
+                mlflow.set_tag("optuna_study", validation_run_name)
                 mlflow.set_tag("validation_sample", "true")
                 study_config = self._get_study_config()
                 study_config = replace(study_config, seed=s)
@@ -217,7 +215,7 @@ class SeedsValidator(StudyValidator):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_name", type=str)
-    parser.add_argument("--run_to_verify", type=str)
+    parser.add_argument("--run_to_validate", type=str)
     parser.add_argument("--mode", type=str, choices=["kfold", "seeds", "list"])
     parser.add_argument("-K", type=int, default=5)
     parser.add_argument("--num_seeds", type=int, default=10)
@@ -231,11 +229,13 @@ def main():
         case "list":
             StudyValidator.list_all_runs()
         case "kfold":
-            validator = KFoldValidator(args.experiment_name, args.run_to_verify, args.K)
+            validator = KFoldValidator(
+                args.experiment_name, args.run_to_validate, args.K
+            )
             validator.run()
         case "seeds":
             validator = SeedsValidator(
-                args.experiment_name, args.run_to_verify, args.num_seeds
+                args.experiment_name, args.run_to_validate, args.num_seeds
             )
             validator.run()
 
