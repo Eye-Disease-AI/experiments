@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace
 import os
 import tempfile
 from typing import Any, Literal, Protocol, override, runtime_checkable
@@ -19,7 +19,7 @@ from lightning.pytorch.loggers import MLFlowLogger
 from experiments.lib.log_silencer import stop_logs
 from experiments.lib.reproducibility import get_git_sha, global_seed_rng
 from experiments.lib.mlflow_setup import Experiment
-from experiments.lib.config_serializing import ClassConfig
+from experiments.lib.config_serializing import ClassConfig, OptunaOptimised
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,7 +41,7 @@ class StudyConfig(ClassConfig):
             raise Exception(f"experiment_name is {self.experiment_name}")
 
 
-class Study[OptunaParams: Mapping[str, Any]](ABC):
+class Study(ABC):
     MLFLOW_STUDY_CONFIG_FILE_PATH: str = "study_config.json"
 
     def __init__(
@@ -56,20 +56,61 @@ class Study[OptunaParams: Mapping[str, Any]](ABC):
     def seed(self) -> int:
         return self._config.seed
 
-    @abstractmethod
-    def _suggest_params(self, trial: optuna.Trial) -> OptunaParams: ...
+    def _suggest_params(
+        self, trial: optuna.Trial, config: Any = None, prefix: str = ""
+    ) -> dict[str, Any]:
+        """
+        Suggests a value for every OptunaOptimised config field and returns in dict.
+        `config` param allows for it to work recursively in subconfigs.
+        """
+        config = self._config if config is None else config
+        out: dict[str, Any] = {}
+        for f in fields(config):
+            value = getattr(config, f.name)
+            path = f"{prefix}{f.name}"
+            if isinstance(value, OptunaOptimised):
+                suggest = getattr(trial, f"suggest_{value.kind}")
+                out[path] = suggest(path, **value.kwargs)
+            elif is_dataclass(value) and not isinstance(value, type):
+                out.update(self._suggest_params(trial, config=value, prefix=f"{path}."))
+        return out
+
+    def _set_config_optuna_params(
+        self,
+        optuna_values: dict[str, Any],
+        config: Any = None,
+        prefix: str = "",
+    ):
+        """Return a copy of the config with every OptunaOptimised field
+        replaced by a value from `optuna_values` parameter.
+        `config` param allows for it to work recursively in subconfigs.
+        """
+        config = self._config if config is None else config
+        overrides: dict[str, Any] = {}
+        for f in fields(config):
+            value = getattr(config, f.name)
+            path = f"{prefix}{f.name}"
+            if isinstance(value, OptunaOptimised):
+                overrides[f.name] = optuna_values[path]
+            elif is_dataclass(value) and not isinstance(value, type):
+                resolved = self._set_config_optuna_params(
+                    optuna_values, value, f"{path}."
+                )
+                if resolved is not value:
+                    overrides[f.name] = resolved
+        return replace(config, **overrides) if overrides else config
 
     # This method should set all needed data modules as class fields and return list of them.
     @abstractmethod
     def _init_datamodules(self) -> list[DataModule]: ...
 
     @abstractmethod
-    def _configure_datamodules(self, params: OptunaParams) -> None: ...
+    def _configure_datamodules(self, params: dict[str, Any]) -> None: ...
 
     @abstractmethod
     def _train(
         self,
-        params: OptunaParams,
+        params: dict[str, Any],
         get_logger,
         callbacks,
     ) -> None: ...

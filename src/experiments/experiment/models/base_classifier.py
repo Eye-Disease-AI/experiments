@@ -14,6 +14,7 @@ from torchmetrics.classification import (
 
 from experiments.lib.config_serializing import (
     ClassConfig,
+    OptunaOptimised,
     deserialize_class,
     must_serialize_class,
 )
@@ -31,8 +32,8 @@ class BaseClassifierModelConfig(ClassConfig):
     backbone_lr_factor: float = 1
     n_classes: int = 2
     class_weights: list[float] | None = None
-    learning_rate: float = 5e-5
-    weight_decay: float | None = 1e-6
+    learning_rate: float | OptunaOptimised = 5e-5
+    weight_decay: float | None | OptunaOptimised = 1e-6
 
 
 class BaseClassifierModel(L.LightningModule):

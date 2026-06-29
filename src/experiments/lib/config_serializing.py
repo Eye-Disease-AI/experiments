@@ -2,9 +2,19 @@ from abc import ABC
 from enum import Enum
 import importlib
 from importlib.metadata import PackagePath
-from typing import Any
+from typing import Any, Literal
 from dataclasses import dataclass, fields, is_dataclass
 import json
+
+
+@dataclass(frozen=True)
+class OptunaOptimised:
+    """Marks a config field as something to be optimised by Optuna.
+    `kwargs` are forwarded to `trial.suggest_<kind>(name, **kwargs)`.
+    """
+
+    kind: Literal["float", "int", "categorical"]
+    kwargs: dict
 
 
 @dataclass(frozen=True, kw_only=True)

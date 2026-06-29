@@ -1,11 +1,10 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from typing import Any, Literal, TypedDict, override
+from typing import Any, Literal, override
 
 from dataset.hard_policy import HardPolicy
 import lightning as L
 import mlflow
-import optuna
 from lightning.pytorch.callbacks import EarlyStopping
 
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
@@ -18,6 +17,7 @@ from experiments.experiment.callbacks import (
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
+from experiments.lib.config_serializing import OptunaOptimised
 from experiments.lib.reproducibility import global_seed_rng
 
 
@@ -25,7 +25,7 @@ from experiments.lib.reproducibility import global_seed_rng
 class BaselineStudyConfig(StudyConfig):
     max_epochs: int = 100
     datamodule_config: DataModuleConfig = NuclearCataractDataModuleConfig(
-        batch_size=64,
+        batch_size=OptunaOptimised("categorical", {"choices": [64]}),
         return_paths=False,
         cache=True,
         hard_policy=HardPolicy.PASSTHROUGH,
@@ -33,7 +33,13 @@ class BaselineStudyConfig(StudyConfig):
         normalize=True,
         augment_rot_angle=15,
     )
-    model_config: ConvNextConfig = ConvNextConfig()
+    model_config: ConvNextConfig = ConvNextConfig(
+        learning_rate=OptunaOptimised(
+            "float", {"low": 1e-6, "high": 1e-4, "log": True}
+        ),
+        weight_decay=OptunaOptimised("float", {"low": 1e-8, "high": 5e-2, "log": True}),
+        dropout=OptunaOptimised("float", {"low": 0.0, "high": 0.5}),
+    )
     early_stopping_patience: int = 5
     backbone_unfreeze_mode: Literal["patience", "const_epochs"] = "const_epochs"
     backbone_unfreeze_num_epochs: int = 5
@@ -47,14 +53,7 @@ class BaselineStudyConfig(StudyConfig):
         return BaselineStudy
 
 
-class OptunaParams(TypedDict):
-    lr: float
-    weight_decay: float
-    dropout: float
-    batch_size: int
-
-
-class BaselineStudy(Study[OptunaParams], KFoldValidatable):
+class BaselineStudy(Study, KFoldValidatable):
     _config: BaselineStudyConfig
 
     def __init__(
@@ -65,15 +64,6 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         self._config = config
 
     @override
-    def _suggest_params(self, trial: optuna.Trial) -> OptunaParams:
-        return OptunaParams(
-            lr=trial.suggest_float("lr", 1e-6, 1e-4, log=True),
-            weight_decay=trial.suggest_float("weight_decay", 1e-8, 5e-2, log=True),
-            dropout=trial.suggest_float("dropout", 0.0, 0.5),
-            batch_size=trial.suggest_categorical("batch_size", [64]),
-        )
-
-    @override
     def _init_datamodules(self) -> list[DataModule]:
         self._datamodule: NuclearCataractDataModule = (
             self._config.datamodule_config.build()
@@ -81,11 +71,21 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         return [self._datamodule]
 
     @override
-    def _configure_datamodules(self, params: OptunaParams) -> None:
+    def _configure_datamodules(self, params: dict[str, Any]) -> None:
         # TODO: Is this best way to do that?
         # I would say it is better to manually create dataset and reuse it to create dataloaders.
         # In other words: just pass dataset to the datamodule class, so it will reuse caches.
-        self._datamodule.batch_size = params["batch_size"]
+        config = self._set_config_optuna_params(params)
+        self._datamodule.batch_size = config.datamodule_config.batch_size
+
+    def _bake_model_config(self, config: BaselineStudyConfig) -> ConvNextConfig:
+        # Inject datamodule-derived fields (only known at runtime) into the
+        # resolved model config before building.
+        return replace(
+            config.model_config,
+            class_weights=self._datamodule.class_weights,
+            n_classes=self._datamodule.n_classes,
+        )
 
     def create_trainer(
         self,
@@ -127,17 +127,10 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
 
     @override
     def _train(
-        self, params: OptunaParams, get_logger, callbacks: list | None = None
+        self, params: dict[str, Any], get_logger, callbacks: list | None = None
     ) -> None:
-        model_config = replace(
-            self._config.model_config,
-            learning_rate=params["lr"],
-            weight_decay=params["weight_decay"],
-            dropout=params["dropout"],
-            class_weights=self._datamodule.class_weights,
-            n_classes=self._datamodule.n_classes,
-        )
-        model = model_config.build()
+        config = self._set_config_optuna_params(params)
+        model = self._bake_model_config(config).build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
             callbacks=callbacks,
@@ -155,17 +148,10 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
     ) -> tuple[L.Trainer, Any]:
         global_seed_rng(self._config.seed)
         self._init_datamodules()
-        self._datamodule.batch_size = best_params["batch_size"]
+        config = self._set_config_optuna_params(best_params)
+        self._datamodule.batch_size = config.datamodule_config.batch_size
         self._datamodule.setup(stage="fit")
-        model_config = replace(
-            self._config.model_config,
-            learning_rate=best_params["lr"],
-            weight_decay=best_params["weight_decay"],
-            dropout=best_params["dropout"],
-            class_weights=self._datamodule.class_weights,
-            n_classes=self._datamodule.n_classes,
-        )
-        best_model = model_config.build()
+        best_model = self._bake_model_config(config).build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
             # We train for best_epoch+1, because best_epoch is 0-indexed.
@@ -192,19 +178,12 @@ class BaselineStudy(Study[OptunaParams], KFoldValidatable):
         global_seed_rng(self._config.seed)
         self._init_datamodules()
 
-        self._datamodule.batch_size = best_params["batch_size"]
+        config = self._set_config_optuna_params(best_params)
+        self._datamodule.batch_size = config.datamodule_config.batch_size
         self._datamodule.setup(stage="fit")
         self._datamodule.setup_fold(fold, num_folds)
 
-        model_config = replace(
-            self._config.model_config,
-            learning_rate=best_params["lr"],
-            weight_decay=best_params["weight_decay"],
-            dropout=best_params["dropout"],
-            class_weights=self._datamodule.class_weights,
-            n_classes=self._datamodule.n_classes,
-        )
-        model = model_config.build()
+        model = self._bake_model_config(config).build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
             max_epochs=best_epoch + 1,

@@ -4,12 +4,12 @@ import lightning as L
 import torch
 from torch.utils.data.dataloader import DataLoader
 
-from experiments.lib.config_serializing import ClassConfig
+from experiments.lib.config_serializing import ClassConfig, OptunaOptimised
 
 
 @dataclass(frozen=True, kw_only=True)
 class DataModuleConfig(ClassConfig):
-    batch_size: int = 64
+    batch_size: int | OptunaOptimised = 64
 
 
 class DataModule(ABC, L.LightningDataModule):

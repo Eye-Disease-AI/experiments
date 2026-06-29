@@ -9,6 +9,7 @@ from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
+from experiments.lib.config_serializing import OptunaOptimised
 
 data_path = "data"
 if not os.path.exists(data_path):
@@ -25,7 +26,7 @@ DATASET_PATH = os.path.join(data_path, dataset_name)
 
 @dataclass(frozen=True, kw_only=True)
 class NuclearCataractDataModuleConfig(DataModuleConfig):
-    batch_size: int = 64
+    batch_size: int | OptunaOptimised = 64
     return_paths: bool = False
     cache: bool = True
     hard_policy: HardPolicyType = HardPolicy.PASSTHROUGH
