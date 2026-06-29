@@ -4,6 +4,7 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
+from experiments.lib.config_serializing import OptunaOptimised
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -55,7 +56,7 @@ class MockNuclearCataractDataModule(DataModule):
 
     @property
     @override
-    def batch_size(self) -> int:
+    def batch_size(self) -> int | OptunaOptimised:
         return self._batch_size
 
     @batch_size.setter
