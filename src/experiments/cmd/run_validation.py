@@ -33,7 +33,7 @@ import argparse
 import os
 from dataclasses import replace
 from tempfile import TemporaryDirectory
-from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
+from experiments.experiment.studies.study import KFoldValidatable, Study
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
 import mlflow
@@ -78,7 +78,7 @@ class StudyValidator:
             return None
         return study.best_params
 
-    def _recreate_study(self, seed: int | None = None):
+    def _get_study_config(self, seed: int | None = None):
         run = self._find_parent_run()
         assert run is not None
 
@@ -89,10 +89,7 @@ class StudyValidator:
             with open(config_file_path, "r") as config_tmp_file:
                 config_file_json = config_tmp_file.read()
                 class_config = ClassConfig.from_json(config_file_json)
-                if seed is not None:
-                    assert isinstance(class_config, StudyConfig)
-                    class_config = replace(class_config, seed=seed)
-                return class_config.build()
+                return class_config
 
     def _find_best_epoch(self):
         study = self._get_study()
@@ -127,7 +124,8 @@ class StudyValidator:
         validation_study_name = f"{self.study_name}/validation"
         best_params = self._find_best_params()
         best_epoch = self._find_best_epoch()
-        study = self._recreate_study()
+        study_config = self._get_study_config()
+        study = study_config.build()
 
         with mlflow.start_run(run_name=validation_study_name):
             self._log_top_level(best_params, best_epoch, study)
@@ -231,7 +229,10 @@ class SeedsValidator(StudyValidator):
                 mlflow.set_tag("seed", s)
                 mlflow.set_tag("optuna_study", validation_study_name)
                 mlflow.set_tag("validation_sample", "true")
-                study = self._recreate_study(s)
+                study_config = self._get_study_config()
+                study_config = replace(study_config, seed=s)
+                study = study_config.build()
+
                 _, validation_metrics = study._retrain(
                     get_logger=study._get_logger_func(
                         seed_run.info.run_id, mlflow.get_tracking_uri()
