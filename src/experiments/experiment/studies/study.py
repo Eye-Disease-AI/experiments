@@ -325,4 +325,5 @@ class KFoldValidatable(Protocol):
         best_params: dict,
         best_epoch: int,
         get_logger,
+        callbacks: list[L.Callback] | None = None,
     ) -> Mapping[str, float]: ...

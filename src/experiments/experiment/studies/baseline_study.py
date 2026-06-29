@@ -174,6 +174,7 @@ class BaselineStudy(Study, KFoldValidatable):
         best_params: dict,
         best_epoch: int,
         get_logger,
+        callbacks: list[L.Callback] | None = None,
     ) -> Mapping[str, float]:
         global_seed_rng(self._config.seed)
         self._init_datamodules()
@@ -187,7 +188,7 @@ class BaselineStudy(Study, KFoldValidatable):
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
             max_epochs=best_epoch + 1,
-            callbacks=[],
+            callbacks=([] if callbacks is None else callbacks),
         )
         global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)

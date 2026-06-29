@@ -2,7 +2,8 @@ import argparse
 import os
 from dataclasses import replace
 from tempfile import TemporaryDirectory
-from experiments.experiment.studies.study import KFoldValidatable, Study
+from experiments.experiment.callbacks import BestSnapshotCallback
+from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
 import mlflow
@@ -69,7 +70,11 @@ class StudyValidator:
         )  # type: ignore
 
     def _post_retrain(
-        self, _best_params, _best_epoch, _study: Study, _validation_study_name
+        self,
+        _best_params,
+        _best_epoch,
+        _study_config: StudyConfig,
+        _validation_study_name,
     ):
         pass
 
@@ -94,19 +99,28 @@ class StudyValidator:
         best_params = self._find_best_params()
         best_epoch = self._find_best_epoch()
         study_config = self._get_study_config()
+        assert isinstance(study_config, StudyConfig)
         study = study_config.build()
 
         with mlflow.start_run(run_name=validation_run_name):
             self._log_top_level(best_params, best_epoch, study)
             with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
+                best_cb = BestSnapshotCallback(
+                    study_config.optuna_metric,
+                    study_config.optuna_direction,
+                    "retrain_",
+                )
                 study._retrain(
                     get_logger=study._get_logger_func(
                         retrain_run.info.run_id, mlflow.get_tracking_uri()
                     ),
                     best_params=best_params,
                     best_epoch=best_epoch,
+                    callbacks=[best_cb],
                 )
-            self._post_retrain(best_params, best_epoch, study, validation_run_name)
+            self._post_retrain(
+                best_params, best_epoch, study_config, validation_run_name
+            )
 
     @staticmethod
     def list_all_runs(parent_only=True):
@@ -145,7 +159,11 @@ class KFoldValidator(StudyValidator):
         mlflow.log_param("K", self.k)
 
     @override
-    def _post_retrain(self, best_params, best_epoch, study: Study, validation_run_name):
+    def _post_retrain(
+        self, best_params, best_epoch, study_config: StudyConfig, validation_run_name
+    ):
+        assert isinstance(study_config, StudyConfig)
+        study: Study = study_config.build()
         assert isinstance(study, KFoldValidatable)
 
         results = []
@@ -156,6 +174,11 @@ class KFoldValidator(StudyValidator):
                 mlflow.set_tag("fold", i)
                 mlflow.set_tag("optuna_study", validation_run_name)
                 mlflow.set_tag("validation_sample", "true")
+
+                best_cb = BestSnapshotCallback(
+                    study_config.optuna_metric, study_config.optuna_direction
+                )
+
                 result = study.validate_fold(
                     fold=i,
                     num_folds=self.k,
@@ -164,6 +187,7 @@ class KFoldValidator(StudyValidator):
                     get_logger=study._get_logger_func(
                         child_run.info.run_id, mlflow.get_tracking_uri()
                     ),
+                    callbacks=[best_cb],
                 )
                 results.append(result)
 
@@ -186,7 +210,7 @@ class SeedsValidator(StudyValidator):
 
     @override
     def _post_retrain(
-        self, best_params, best_epoch, _study: Study, validation_run_name
+        self, best_params, best_epoch, study_config: StudyConfig, validation_run_name
     ):
         results = []
         seeds = list(range(self.num_seeds))
@@ -196,9 +220,11 @@ class SeedsValidator(StudyValidator):
                 mlflow.set_tag("seed", s)
                 mlflow.set_tag("optuna_study", validation_run_name)
                 mlflow.set_tag("validation_sample", "true")
-                study_config = self._get_study_config()
                 study_config = replace(study_config, seed=s)
                 study = study_config.build()
+                best_cb = BestSnapshotCallback(
+                    study_config.optuna_metric, study_config.optuna_direction
+                )
 
                 _, validation_metrics = study._retrain(
                     get_logger=study._get_logger_func(
@@ -206,6 +232,7 @@ class SeedsValidator(StudyValidator):
                     ),
                     best_params=best_params,
                     best_epoch=best_epoch,
+                    callbacks=[best_cb],
                 )
                 results.append(validation_metrics)
 
