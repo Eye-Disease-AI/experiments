@@ -52,13 +52,10 @@ class StudyValidator:
         self.study_name = study_name
 
     def _find_parent_run(self) -> mlflow.entities.Run | None:
-        client = Experiment().client
-        mlflow_exp = client.get_experiment_by_name(self.experiment_name)
+        exp = Experiment(self.experiment_name)
+        mlflow_exp = exp.mlflow_experiment
 
-        if not mlflow_exp:
-            return None
-
-        for run in client.search_runs([mlflow_exp.experiment_id], max_results=9999):
+        for run in exp.client.search_runs([mlflow_exp.experiment_id], max_results=9999):
             if (
                 "optuna_study" in run.data.tags
                 and run.data.tags["optuna_study"] == self.study_name

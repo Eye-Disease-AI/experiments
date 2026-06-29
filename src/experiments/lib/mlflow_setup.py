@@ -46,7 +46,7 @@ class Experiment:
         mlflow.set_tracking_uri(self.MLFLOW_URI)
 
         if self.experiment_name:
-            mlflow.set_experiment(self.experiment_name)
+            self.mlflow_experiment = mlflow.set_experiment(self.experiment_name)
 
         self.client = mlflow.MlflowClient()
         self.storage = RDBStorage(url=self.OPTUNA_DB_URL)
