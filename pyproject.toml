@@ -26,7 +26,7 @@ dependencies = [
 
 [project.scripts]
 all = "experiments.cmd.run_all:main"
-studies = "experiments.cmd.run_studies:main"
+baseline = "experiments.cmd.run_baseline:main"
 debug = "experiments.cmd.run_debug:main"
 
 [tool.basedpyright]
