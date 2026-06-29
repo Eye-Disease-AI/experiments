@@ -21,7 +21,6 @@ class MockConvNextConfig(ConvNextConfig):
 class MockConvNext(BaseClassifierModel):
     def __init__(self, config: MockConvNextConfig):
         super().__init__(config)
-        self.save_hyperparameters()
         self.head = nn.Linear(1, config.n_classes)
 
     @override

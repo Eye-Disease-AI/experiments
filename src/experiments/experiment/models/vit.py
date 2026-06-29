@@ -27,7 +27,6 @@ class ViT(BaseClassifierModel):
         config: ViTConfig,
     ):
         super().__init__(config)
-        self.save_hyperparameters()
         self.model = torchvision.models.vit_b_16(weights="IMAGENET1K_V1")
         in_features = self.model.heads.head.in_features  # type:ignore # 768
         self.model.heads = nn.Sequential(
