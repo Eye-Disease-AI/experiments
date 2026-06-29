@@ -218,9 +218,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_name", type=str)
     parser.add_argument("--run_to_verify", type=str)
-    parser.add_argument(
-        "--mode", type=str, choices=["kfold", "seeds", "list"], default="list"
-    )
+    parser.add_argument("--mode", type=str, choices=["kfold", "seeds", "list"])
     parser.add_argument("-K", type=int, default=5)
     parser.add_argument("--num_seeds", type=int, default=10)
     return parser.parse_args()
