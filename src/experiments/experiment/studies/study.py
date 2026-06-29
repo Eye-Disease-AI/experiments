@@ -71,7 +71,8 @@ class Study(ABC):
             if isinstance(value, OptunaOptimised):
                 suggest = getattr(trial, f"suggest_{value.kind}")
                 out[path] = suggest(path, **value.kwargs)
-            elif is_dataclass(value) and not isinstance(value, type):
+            elif is_dataclass(value):
+                assert not isinstance(value, type)
                 out.update(self._suggest_params(trial, config=value, prefix=f"{path}."))
         return out
 
@@ -92,13 +93,14 @@ class Study(ABC):
             path = f"{prefix}{f.name}"
             if isinstance(value, OptunaOptimised):
                 overrides[f.name] = optuna_values[path]
-            elif is_dataclass(value) and not isinstance(value, type):
+            elif is_dataclass(value):
+                assert not isinstance(value, type)
                 resolved = self._set_config_optuna_params(
                     optuna_values, value, f"{path}."
                 )
                 if resolved is not value:
                     overrides[f.name] = resolved
-        return replace(config, **overrides) if overrides else config
+        return replace(config, **overrides)
 
     # This method should set all needed data modules as class fields and return list of them.
     @abstractmethod
