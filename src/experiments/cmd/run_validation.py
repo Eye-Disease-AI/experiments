@@ -50,12 +50,14 @@ class StudyValidator:
     ):
         self.experiment_name = experiment_name
         self.study_name = study_name
+        self.experiment = Experiment(self.experiment_name)
 
     def _find_parent_run(self) -> mlflow.entities.Run | None:
-        exp = Experiment(self.experiment_name)
-        mlflow_exp = exp.mlflow_experiment
+        mlflow_exp = self.experiment.mlflow_experiment
 
-        for run in exp.client.search_runs([mlflow_exp.experiment_id], max_results=9999):
+        for run in self.experiment.client.search_runs(
+            [mlflow_exp.experiment_id], max_results=9999
+        ):
             if (
                 "optuna_study" in run.data.tags
                 and run.data.tags["optuna_study"] == self.study_name
@@ -65,24 +67,23 @@ class StudyValidator:
 
         return None
 
-    def _get_experiment_and_study(self):
-        exp = Experiment(self.experiment_name)
-        study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
-        return exp, study
+    def _get_study(self):
+        return optuna.load_study(
+            study_name=self.study_name, storage=self.experiment.storage
+        )
 
     def _find_best_params(self):
-        _, study = self._get_experiment_and_study()
+        study = self._get_study()
         if study is None:
             return None
         return study.best_params
 
     def _recreate_study(self, seed: int | None = None):
-        exp = Experiment(self.experiment_name)
         run = self._find_parent_run()
         assert run is not None
 
         with TemporaryDirectory() as tmp_dir:
-            config_file_path = exp.client.download_artifacts(
+            config_file_path = self.experiment.client.download_artifacts(
                 run.info.run_id, Study.MLFLOW_STUDY_CONFIG_FILE_PATH, tmp_dir
             )
             with open(config_file_path, "r") as config_tmp_file:
@@ -94,8 +95,7 @@ class StudyValidator:
                 return class_config.build()
 
     def _find_best_epoch(self):
-        exp = Experiment(self.experiment_name)
-        study = optuna.load_study(study_name=self.study_name, storage=exp.storage)
+        study = self._get_study()
         _agg = min if study.direction == "min" else max
         return _agg(
             study.best_trial.intermediate_values,
@@ -114,11 +114,11 @@ class StudyValidator:
         mlflow.log_param("seed", study.seed)
         mlflow.log_metric("best_epoch", best_epoch)
 
-        exp, optuna_study = self._get_experiment_and_study()
+        optuna_study = self._get_study()
         if optuna_study is not None:
             best_trial_run_id = optuna_study.best_trial.user_attrs.get("mlflow_run_id")
             if best_trial_run_id:
-                best_run = exp.client.get_run(best_trial_run_id)
+                best_run = self.experiment.client.get_run(best_trial_run_id)
                 for k, v in best_run.data.metrics.items():
                     if k.startswith("best_val_"):
                         mlflow.log_metric(k, v)
