@@ -87,6 +87,7 @@ class ACGANModule(L.LightningModule):
             self.adversarial_loss(validity, valid)
             + self.auxiliary_loss(pred_label, gen_labels)
         )
+        self.log("g_loss", g_loss, prog_bar=True)
 
         self.manual_backward(g_loss)
         optimizer_G.step()
@@ -113,6 +114,7 @@ class ACGANModule(L.LightningModule):
 
         # Total discriminator loss
         d_loss = (d_real_loss + d_fake_loss) / 2
+        self.log("d_loss", d_loss, prog_bar=True)
 
         # Calculate discriminator accuracy
         pred = np.concatenate(
@@ -121,7 +123,8 @@ class ACGANModule(L.LightningModule):
         gt = np.concatenate(
             [labels.data.cpu().numpy(), gen_labels.data.cpu().numpy()], axis=0
         )
-        _ = np.mean(np.argmax(pred, axis=1) == gt)
+        d_acc = np.mean(np.argmax(pred, axis=1) == gt)
+        self.log("d_acc", d_acc, prog_bar=True)
 
         self.manual_backward(d_loss)
         optimizer_D.step()
