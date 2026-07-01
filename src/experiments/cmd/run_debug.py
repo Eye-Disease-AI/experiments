@@ -9,7 +9,7 @@ from experiments.experiment.studies.baseline_study import (
     BaselineStudy,
     BaselineStudyConfig,
 )
-from experiments.cmd.ci_poc import get_trial_vals
+from experiments.lib.reproducibility import get_trial_vals
 
 EXPERIMENT_NAME = "sanity-check-debug1236"
 study_config = BaselineStudyConfig(
