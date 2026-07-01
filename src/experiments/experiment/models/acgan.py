@@ -137,7 +137,12 @@ class ACGANModule(L.LightningModule):
         optimizer_D = torch.optim.Adam(self.discriminator.parameters())
         return optimizer_G, optimizer_D
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor: ...
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        batch_size = z.shape[0]
+        gen_labels = Variable(
+            LongTensor(np.random.randint(0, self.config.n_classes, batch_size))
+        )
+        return self.generator(z, gen_labels)
 
     def sample_image(self, n_row):
         """Saves a grid of generated digits ranging from 0 to n_classes"""
