@@ -17,6 +17,11 @@ class OptunaOptimised:
     kwargs: dict
 
 
+def resolved[T](value: T | OptunaOptimised) -> T:
+    assert not isinstance(value, OptunaOptimised)
+    return value
+
+
 @dataclass(frozen=True, kw_only=True)
 class ClassConfig(ABC):
     configured_class: PackagePath | None = None
