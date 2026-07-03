@@ -4,14 +4,9 @@ import lightning as L
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 
 from experiments.experiment.studies.study import override
 from experiments.lib.config_serializing import ClassConfig, OptunaOptimised, resolved
-
-cuda = True if torch.cuda.is_available() else False
-FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor  # type: ignore
-LongTensor = torch.cuda.LongTensor if cuda else torch.LongTensor  # type: ignore
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -55,12 +50,14 @@ class ACGANModule(L.LightningModule):
         batch_size = imgs.shape[0]
 
         # Adversarial ground truths
-        valid = Variable(FloatTensor(batch_size, 1).fill_(1.0), requires_grad=False)
-        fake = Variable(FloatTensor(batch_size, 1).fill_(0.0), requires_grad=False)
+        valid = torch.Tensor(batch_size, 1).fill_(1.0).to(self.device)
+        valid.requires_grad = False
+        fake = torch.Tensor(batch_size, 1).fill_(0.0).to(self.device)
+        fake.requires_grad = False
 
         # Configure input
-        real_imgs = Variable(imgs.type(FloatTensor))
-        labels = Variable(labels.type(LongTensor))
+        real_imgs = imgs.to(torch.float)
+        labels = labels.to(torch.long)
 
         # -----------------
         #  Train Generator
@@ -69,14 +66,12 @@ class ACGANModule(L.LightningModule):
         optimizer_G.zero_grad()
 
         # Sample noise and labels as generator input
-        z = Variable(
-            FloatTensor(
-                np.random.normal(0, 1, (batch_size, resolved(self.config.latent_dim)))
-            )
-        )
-        gen_labels = Variable(
-            LongTensor(np.random.randint(0, self.config.n_classes, batch_size))
-        )
+        z = torch.Tensor(
+            np.random.normal(0, 1, (batch_size, resolved(self.config.latent_dim))),
+        ).to(dtype=torch.float, device=self.device)
+        gen_labels = torch.Tensor(
+            np.random.randint(0, self.config.n_classes, batch_size)
+        ).to(dtype=torch.long, device=self.device)
 
         # Generate a batch of images
         gen_imgs = self.generator(z, gen_labels)
@@ -117,13 +112,9 @@ class ACGANModule(L.LightningModule):
         self.log("d_loss", d_loss, prog_bar=True)
 
         # Calculate discriminator accuracy
-        pred = np.concatenate(
-            [real_aux.data.cpu().numpy(), fake_aux.data.cpu().numpy()], axis=0
-        )
-        gt = np.concatenate(
-            [labels.data.cpu().numpy(), gen_labels.data.cpu().numpy()], axis=0
-        )
-        d_acc = np.mean(np.argmax(pred, axis=1) == gt)
+        pred = torch.cat([real_aux, fake_aux], dim=0)
+        gt = torch.cat([labels, gen_labels], dim=0)
+        d_acc = (pred.argmax(dim=1) == gt).float().mean()
         self.log("d_acc", d_acc, prog_bar=True)
 
         self.manual_backward(d_loss)
@@ -142,22 +133,20 @@ class ACGANModule(L.LightningModule):
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         batch_size = z.shape[0]
-        gen_labels = Variable(
-            LongTensor(np.random.randint(0, self.config.n_classes, batch_size))
-        )
+        gen_labels = torch.Tensor(
+            np.random.randint(0, self.config.n_classes, batch_size)
+        ).to(dtype=torch.long, device=self.device)
         return self.generator(z, gen_labels)
 
     def sample_image(self, n_row):
         """Saves a grid of generated digits ranging from 0 to n_classes"""
         # Sample noise
-        z = Variable(
-            FloatTensor(
-                np.random.normal(0, 1, (n_row**2, resolved(self.config.latent_dim)))
-            )
-        )
+        z = torch.Tensor(
+            np.random.normal(0, 1, (n_row**2, resolved(self.config.latent_dim)))
+        ).to(dtype=torch.float, device=self.device)
         # Get labels ranging from 0 to n_classes for n rows
         labels = np.array([num for _ in range(n_row) for num in range(n_row)])
-        labels = Variable(LongTensor(labels))
+        labels = torch.Tensor(labels).to(dtype=torch.long, device=self.device)
         return self.generator(z, labels)
 
     def weights_init_normal(self, m):
