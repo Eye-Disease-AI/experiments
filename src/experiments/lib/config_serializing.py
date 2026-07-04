@@ -1,10 +1,10 @@
-from abc import ABC
-from enum import Enum
 import importlib
+import json
+from abc import ABC
+from dataclasses import dataclass, fields, is_dataclass
+from enum import Enum
 from importlib.metadata import PackagePath
 from typing import Any, Literal
-from dataclasses import dataclass, fields, is_dataclass
-import json
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class ClassConfig(ABC):
             "configured_class",
             serialize_class(self.get_configured_class()),
         )
+        self.post_init_checks()
 
     def to_dict(self, save_class=False):
         if is_dataclass(self):
