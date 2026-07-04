@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 
 import lightning as L
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision.utils as tvutils
+from lightning.pytorch.loggers.mlflow import MLFlowLogger
+from mlflow import MlflowClient
 
 from experiments.experiment.studies.study import override
 from experiments.lib.config_serializing import ClassConfig, OptunaOptimised, resolved
@@ -12,6 +16,7 @@ from experiments.lib.config_serializing import ClassConfig, OptunaOptimised, res
 @dataclass(frozen=True, kw_only=True)
 class ACGANModuleConfig(ClassConfig):
     n_classes: int
+    class_names: list[str]
     latent_dim: int | OptunaOptimised
     img_size: int
     num_channels: int
@@ -124,30 +129,54 @@ class ACGANModule(L.LightningModule):
         pass
 
     def on_validation_epoch_end(self):
-        pass
+        if self.trainer.sanity_checking:
+            return
+
+        if not isinstance(self.logger, MLFlowLogger):
+            return
+
+        fig = self.sample_image_grid()
+        mlflow_client: MlflowClient = self.logger.experiment
+        mlflow_client.log_figure(
+            str(self.logger.run_id), fig, f"gan_sample_{self.current_epoch}.png"
+        )
+        plt.close(fig)
 
     def configure_optimizers(self):
         optimizer_G = torch.optim.Adam(self.generator.parameters())
         optimizer_D = torch.optim.Adam(self.discriminator.parameters())
         return optimizer_G, optimizer_D
 
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
-        batch_size = z.shape[0]
-        gen_labels = torch.Tensor(
-            np.random.randint(0, self.config.n_classes, batch_size)
-        ).to(dtype=torch.long, device=self.device)
-        return self.generator(z, gen_labels)
+    def forward(self, noise: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        return self.generator(noise, labels)
 
-    def sample_image(self, n_row):
+    def sample_image_grid(self):
         """Saves a grid of generated digits ranging from 0 to n_classes"""
         # Sample noise
         z = torch.Tensor(
-            np.random.normal(0, 1, (n_row**2, resolved(self.config.latent_dim)))
+            np.random.normal(
+                0, 1, (self.config.n_classes**2, resolved(self.config.latent_dim))
+            )
         ).to(dtype=torch.float, device=self.device)
         # Get labels ranging from 0 to n_classes for n rows
-        labels = np.array([num for _ in range(n_row) for num in range(n_row)])
+        labels = np.array(
+            [
+                num
+                for _ in range(self.config.n_classes)
+                for num in range(self.config.n_classes)
+            ]
+        )
         labels = torch.Tensor(labels).to(dtype=torch.long, device=self.device)
-        return self.generator(z, labels)
+        imgs = self(z, labels)
+        n_classes = self.config.n_classes
+
+        img_grid = tvutils.make_grid(
+            imgs, nrow=n_classes, normalize=True, value_range=(-1, 1)
+        )
+
+        fig, ax = plt.subplots()
+        ax.imshow(img_grid.permute(1, 2, 0).cpu().detach().numpy())
+        return fig
 
     def weights_init_normal(self, m):
         classname = m.__class__.__name__

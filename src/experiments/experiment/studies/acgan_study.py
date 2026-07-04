@@ -3,6 +3,7 @@ from typing import Any
 
 import lightning as L
 from dataset.hard_policy import HardPolicy
+from lightning.pytorch.loggers.mlflow import MLFlowLogger
 from typing_extensions import override
 
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
@@ -10,7 +11,7 @@ from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModule,
     NuclearCataractDataModuleConfig,
 )
-from experiments.experiment.models.acgan import ACGANModuleConfig
+from experiments.experiment.models.acgan import ACGANModule, ACGANModuleConfig
 from experiments.experiment.models.convnext import ConvNextConfig
 from experiments.experiment.studies.study import Study, StudyConfig
 from experiments.lib.config_serializing import OptunaOptimised
@@ -36,6 +37,7 @@ class ACGANStudyConfig(StudyConfig):
     gen_model_config: ACGANModuleConfig = ACGANModuleConfig(
         # I think we should support some way of saying a kw is undefined!
         n_classes=-1,
+        class_names=[],
         latent_dim=OptunaOptimised("int", {"low": 50, "high": 200, "log": True}),
         img_size=224,
         num_channels=3,
@@ -79,6 +81,7 @@ class ACGANStudy(Study):
         return replace(
             config.gen_model_config,
             n_classes=self._datamodule.n_classes,
+            class_names=self._datamodule.class_names,
         )
 
     def _create_clf_trainer(
@@ -108,6 +111,7 @@ class ACGANStudy(Study):
             enable_progress_bar=True,
             enable_model_summary=False,
             enable_checkpointing=False,
+            check_val_every_n_epoch=3,
             log_every_n_steps=1,
             precision=self._config.gpu_precision,  # type: ignore
             deterministic=True,
@@ -116,13 +120,14 @@ class ACGANStudy(Study):
     @override
     def _train(self, params: dict[str, Any], get_logger, callbacks) -> None:
         config: ACGANStudyConfig = self._set_config_optuna_params(params)
-        gen_model = self._bake_gen_model_config(config).build()
-        gen_trainer = self._create_gen_trainer(
-            logger=get_logger(self._config.gen_model_config.class_name())
+        gen_module: ACGANModule = self._bake_gen_model_config(config).build()
+        gen_logger: MLFlowLogger = get_logger(
+            self._config.gen_model_config.class_name()
         )
+        gen_trainer = self._create_gen_trainer(logger=gen_logger)
 
         global_seed_rng(self._config.seed)
-        gen_trainer.fit(gen_model, datamodule=self._datamodule)
+        gen_trainer.fit(gen_module, datamodule=self._datamodule)
 
     @override
     def _retrain(
