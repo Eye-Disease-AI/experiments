@@ -1,12 +1,13 @@
-from dataclasses import dataclass
 import math
 import os
-from dataset.hard_policy import HardPolicyType
-from typing_extensions import override
+from dataclasses import dataclass
+
 import numpy as np
 import torch
+from dataset.hard_policy import HardPolicyType
 from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
+from typing_extensions import override
 
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.lib.config_serializing import OptunaOptimised
@@ -138,6 +139,12 @@ class NuclearCataractDataModule(DataModule):
         self.train_set = _SubsetTransformer(train, transform=self.transform)
         self.val_set = _SubsetTransformer(val, transform=self.val_transform)
 
+    def setup_augment(self, fake_set: torch.utils.data.Dataset) -> None:
+        train_set = self.dataset.train_set()
+        train_concat = torch.utils.data.ConcatDataset([train_set, fake_set])
+        self.train_set = _SubsetTransformer(train_concat, transform=self.transform)
+        self.train_class_weights = train_set.class_weights()
+
     @override
     def train_dataloader(self):
         return self.dataLoaderCommon(self.train_set)
@@ -204,8 +211,9 @@ class _SubsetTransformer(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    from experiments.lib.reproducibility import global_seed_rng
     import matplotlib.pyplot as plt
+
+    from experiments.lib.reproducibility import global_seed_rng
 
     seed = 2137
     global_seed_rng(seed)
