@@ -44,6 +44,7 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
 class NuclearCataractDataModule(DataModule):
     DATASET_STD: list[float] = [0.281245, 0.243682, 0.220464]
     DATASET_MEAN: list[float] = [0.229015, 0.1663, 0.106812]
+    is_augmented: bool = False
 
     def __init__(
         self,
@@ -144,6 +145,14 @@ class NuclearCataractDataModule(DataModule):
         train_concat = torch.utils.data.ConcatDataset([train_set, fake_set])
         self.train_set = _SubsetTransformer(train_concat, transform=self.transform)
         self.train_class_weights = train_set.class_weights()
+        self.is_augmented = True
+
+    def reset_augument(self):
+        if self.is_augmented:
+            train_set = self.dataset.train_set()
+            self.train_set = _SubsetTransformer(train_set, transform=self.transform)
+            self.train_class_weights = train_set.class_weights()
+            self.is_augmented = False
 
     @override
     def train_dataloader(self):

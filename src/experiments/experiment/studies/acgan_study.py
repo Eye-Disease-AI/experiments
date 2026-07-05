@@ -122,6 +122,8 @@ class ACGANStudy(Study):
 
     @override
     def _train(self, params: dict[str, Any], get_logger, callbacks) -> None:
+        self._datamodule.reset_augument()
+
         config: ACGANStudyConfig = self._set_config_optuna_params(params)
         gen_module: ACGANModule = self._bake_gen_model_config(config).build()
         gen_logger: MLFlowLogger = get_logger(config.gen_model_config.class_name())
