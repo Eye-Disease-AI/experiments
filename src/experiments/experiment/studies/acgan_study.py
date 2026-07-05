@@ -140,16 +140,18 @@ class ACGANStudy(Study):
         fake_imgs = []
         fake_labels = []
 
-        for _ in tqdm(range(num_samples)):
-            sample_noise = torch.rand(
-                (1, resolved(config.gen_model_config.latent_dim)),
-            )
-            sample_labels = torch.randint(0, self._datamodule.n_classes, (1,)).to(
-                dtype=torch.long
-            )
-            fake_img = gen_module(sample_noise, sample_labels).squeeze()
-            fake_imgs.append(fake_img)
-            fake_labels.append(sample_labels.squeeze())
+        gen_module.eval()
+        with torch.no_grad():
+            for _ in tqdm(range(num_samples)):
+                sample_noise = torch.rand(
+                    (1, resolved(config.gen_model_config.latent_dim)),
+                )
+                sample_labels = torch.randint(0, self._datamodule.n_classes, (1,)).to(
+                    dtype=torch.long
+                )
+                fake_img = gen_module(sample_noise, sample_labels).squeeze()
+                fake_imgs.append(fake_img)
+                fake_labels.append(sample_labels.squeeze())
 
         fake_dataset = FakeDataset(fake_imgs, fake_labels)
         self._datamodule.setup_augment(fake_dataset)
