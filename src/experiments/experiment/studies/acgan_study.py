@@ -2,6 +2,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import lightning as L
+import mlflow
 import torch
 from dataset.hard_policy import HardPolicy
 from lightning.pytorch.loggers.mlflow import MLFlowLogger
@@ -90,10 +91,11 @@ class ACGANStudy(Study):
     def _create_clf_trainer(
         self,
         logger,
+        max_epochs=None,
         callbacks=None,
     ):
         return L.Trainer(
-            max_epochs=self._config.max_clf_epochs,
+            max_epochs=(max_epochs or self._config.max_clf_epochs),
             accelerator=self._config.device,
             logger=logger,
             callbacks=callbacks,
@@ -116,11 +118,31 @@ class ACGANStudy(Study):
             enable_progress_bar=True,
             enable_model_summary=False,
             enable_checkpointing=False,
-            check_val_every_n_epoch=3,
+            check_val_every_n_epoch=1,
             log_every_n_steps=1,
             precision=self._config.gpu_precision,  # type: ignore
             deterministic=True,
         )
+
+    def _create_fake_dataset(self, gen_module: ACGANModule):
+        num_samples = 100
+        fake_imgs = []
+        fake_labels = []
+
+        gen_module.eval()
+        with torch.no_grad():
+            for _ in tqdm(range(num_samples)):
+                sample_noise = torch.rand(
+                    (1, resolved(gen_module.config.latent_dim)),
+                )
+                sample_labels = torch.randint(0, self._datamodule.n_classes, (1,)).to(
+                    dtype=torch.long
+                )
+                fake_img = gen_module(sample_noise, sample_labels).squeeze()
+                fake_imgs.append(fake_img)
+                fake_labels.append(sample_labels.squeeze())
+
+        return FakeDataset(fake_imgs, fake_labels)
 
     @override
     def _train(self, params: dict[str, Any], get_logger, callbacks) -> None:
@@ -136,28 +158,12 @@ class ACGANStudy(Study):
 
         clf_module: ConvNext = self._bake_clf_model_config(config).build()
         clf_logger: MLFlowLogger = get_logger(config.clf_model_config.class_name())
+        # TODO: We pass callbacks only here, should it be like that?
         clf_trainer = self._create_clf_trainer(logger=clf_logger, callbacks=callbacks)
 
         print("Sampling from trained GAN to create augmented dataset")
 
-        num_samples = 100
-        fake_imgs = []
-        fake_labels = []
-
-        gen_module.eval()
-        with torch.no_grad():
-            for _ in tqdm(range(num_samples)):
-                sample_noise = torch.rand(
-                    (1, resolved(config.gen_model_config.latent_dim)),
-                )
-                sample_labels = torch.randint(0, self._datamodule.n_classes, (1,)).to(
-                    dtype=torch.long
-                )
-                fake_img = gen_module(sample_noise, sample_labels).squeeze()
-                fake_imgs.append(fake_img)
-                fake_labels.append(sample_labels.squeeze())
-
-        fake_dataset = FakeDataset(fake_imgs, fake_labels)
+        fake_dataset = self._create_fake_dataset(gen_module)
         self._datamodule.setup_augment(fake_dataset)
 
         global_seed_rng(config.seed)
@@ -167,7 +173,42 @@ class ACGANStudy(Study):
     def _retrain(
         self, get_logger, best_params: dict, best_epoch: int, callbacks: list
     ) -> tuple[L.Trainer, Any]:
-        raise NotImplementedError
+        global_seed_rng(self._config.seed)
+        self._init_datamodules()
+        config = self._set_config_optuna_params(best_params)
+        self._datamodule.batch_size = config.datamodule_config.batch_size
+        self._datamodule.setup(stage="fit")
+
+        best_gen_module: ACGANModule = self._bake_gen_model_config(config).build()
+        gen_trainer = self._create_gen_trainer(
+            logger=get_logger(self._config.gen_model_config.class_name())
+        )
+        global_seed_rng(config.seed)
+        gen_trainer.fit(best_gen_module, datamodule=self._datamodule)
+
+        fake_dataset = self._create_fake_dataset(best_gen_module)
+        self._datamodule.setup_augment(fake_dataset)
+
+        best_clf_model: ConvNext = self._bake_clf_model_config(config).build()
+        clf_trainer = self._create_clf_trainer(
+            max_epochs=best_epoch + 1,
+            callbacks=callbacks,
+            logger=get_logger(self._config.clf_model_config.class_name()),
+        )
+        global_seed_rng(config.seed)
+        clf_trainer.fit(
+            best_clf_model,
+            datamodule=self._datamodule,
+        )
+
+        validation_metrics = clf_trainer.validate(
+            best_clf_model, datamodule=self._datamodule
+        )
+        retrain_metric = validation_metrics[0][self._config.optuna_metric]
+        mlflow.log_metric(f"retrain_{self._config.optuna_metric}", retrain_metric)
+
+        # TODO: No way to pass gan trainer and save its weights!
+        return clf_trainer, validation_metrics
 
 
 class FakeDataset(Dataset):
