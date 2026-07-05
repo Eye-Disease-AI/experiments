@@ -24,8 +24,17 @@ from experiments.lib.reproducibility import global_seed_rng
 
 @dataclass(frozen=True, kw_only=True)
 class ACGANStudyConfig(StudyConfig):
-    datamodule_config: DataModuleConfig = NuclearCataractDataModuleConfig(
+    gen_datamodule_config: DataModuleConfig = NuclearCataractDataModuleConfig(
         batch_size=8,
+        return_paths=False,
+        cache=True,
+        hard_policy=HardPolicy.PASSTHROUGH,
+        image_size=224,
+        normalize=False,
+        augment_rot_angle=15,
+    )
+    clf_datamodule_config: DataModuleConfig = NuclearCataractDataModuleConfig(
+        batch_size=OptunaOptimised("categorical", {"choices": [64]}),
         return_paths=False,
         cache=True,
         hard_policy=HardPolicy.PASSTHROUGH,
@@ -64,10 +73,10 @@ class ACGANStudy(Study):
 
     @override
     def _init_datamodules(self) -> list[DataModule]:
-        self._datamodule: NuclearCataractDataModule = (
-            self._config.datamodule_config.build()
+        self._gen_datamodule: NuclearCataractDataModule = (
+            self._config.gen_datamodule_config.build()
         )
-        return [self._datamodule]
+        return [self._gen_datamodule]
 
     @override
     def _configure_datamodules(self, params: dict[str, Any]) -> None:
@@ -77,16 +86,26 @@ class ACGANStudy(Study):
     def _bake_clf_model_config(self, config: ACGANStudyConfig) -> ConvNextConfig:
         return replace(
             config.clf_model_config,
-            class_weights=self._datamodule.class_weights,
-            n_classes=self._datamodule.n_classes,
+            class_weights=self._clf_datamodule.class_weights,
+            n_classes=self._clf_datamodule.n_classes,
         )
 
     def _bake_gen_model_config(self, config: ACGANStudyConfig) -> ACGANModuleConfig:
         return replace(
             config.gen_model_config,
-            n_classes=self._datamodule.n_classes,
-            class_names=self._datamodule.class_names,
+            n_classes=self._gen_datamodule.n_classes,
+            class_names=self._gen_datamodule.class_names,
         )
+
+    def _build_augmented_clf_datamodule(
+        self, config: ACGANStudyConfig, fake_dataset: Dataset
+    ) -> NuclearCataractDataModule:
+        self._clf_datamodule: NuclearCataractDataModule = (
+            config.clf_datamodule_config.build()
+        )
+        self._clf_datamodule.setup(stage="fit")
+        self._clf_datamodule.setup_augment(fake_dataset)
+        return self._clf_datamodule
 
     def _create_clf_trainer(
         self,
@@ -132,12 +151,12 @@ class ACGANStudy(Study):
         gen_module.eval()
         with torch.no_grad():
             for _ in tqdm(range(num_samples)):
-                sample_noise = torch.rand(
+                sample_noise = torch.randn(
                     (1, resolved(gen_module.config.latent_dim)),
                 )
-                sample_labels = torch.randint(0, self._datamodule.n_classes, (1,)).to(
-                    dtype=torch.long
-                )
+                sample_labels = torch.randint(
+                    0, self._gen_datamodule.n_classes, (1,)
+                ).to(dtype=torch.long)
                 fake_img = gen_module(sample_noise, sample_labels).squeeze()
                 fake_imgs.append(fake_img)
                 fake_labels.append(sample_labels.squeeze())
@@ -146,28 +165,27 @@ class ACGANStudy(Study):
 
     @override
     def _train(self, params: dict[str, Any], get_logger, callbacks) -> None:
-        self._datamodule.reset_augument()
-
         config: ACGANStudyConfig = self._set_config_optuna_params(params)
         gen_module: ACGANModule = self._bake_gen_model_config(config).build()
         gen_logger: MLFlowLogger = get_logger(config.gen_model_config.class_name())
         gen_trainer = self._create_gen_trainer(logger=gen_logger)
 
         global_seed_rng(config.seed)
-        gen_trainer.fit(gen_module, datamodule=self._datamodule)
+        gen_trainer.fit(gen_module, datamodule=self._gen_datamodule)
+
+        print("Sampling from trained GAN to create augmented dataset")
+        fake_dataset = self._create_fake_dataset(gen_module)
+
+        global_seed_rng(config.seed)
+        clf_datamodule = self._build_augmented_clf_datamodule(config, fake_dataset)
 
         clf_module: ConvNext = self._bake_clf_model_config(config).build()
         clf_logger: MLFlowLogger = get_logger(config.clf_model_config.class_name())
         # TODO: We pass callbacks only here, should it be like that?
         clf_trainer = self._create_clf_trainer(logger=clf_logger, callbacks=callbacks)
 
-        print("Sampling from trained GAN to create augmented dataset")
-
-        fake_dataset = self._create_fake_dataset(gen_module)
-        self._datamodule.setup_augment(fake_dataset)
-
         global_seed_rng(config.seed)
-        clf_trainer.fit(clf_module, datamodule=self._datamodule)
+        clf_trainer.fit(clf_module, datamodule=clf_datamodule)
 
     @override
     def _retrain(
@@ -176,18 +194,20 @@ class ACGANStudy(Study):
         global_seed_rng(self._config.seed)
         self._init_datamodules()
         config = self._set_config_optuna_params(best_params)
-        self._datamodule.batch_size = config.datamodule_config.batch_size
-        self._datamodule.setup(stage="fit")
+        self._gen_datamodule.batch_size = config.gen_datamodule_config.batch_size
+        self._gen_datamodule.setup(stage="fit")
 
         best_gen_module: ACGANModule = self._bake_gen_model_config(config).build()
         gen_trainer = self._create_gen_trainer(
             logger=get_logger(self._config.gen_model_config.class_name())
         )
         global_seed_rng(config.seed)
-        gen_trainer.fit(best_gen_module, datamodule=self._datamodule)
+        gen_trainer.fit(best_gen_module, datamodule=self._gen_datamodule)
 
         fake_dataset = self._create_fake_dataset(best_gen_module)
-        self._datamodule.setup_augment(fake_dataset)
+
+        global_seed_rng(config.seed)
+        clf_datamodule = self._build_augmented_clf_datamodule(config, fake_dataset)
 
         best_clf_model: ConvNext = self._bake_clf_model_config(config).build()
         clf_trainer = self._create_clf_trainer(
@@ -198,11 +218,11 @@ class ACGANStudy(Study):
         global_seed_rng(config.seed)
         clf_trainer.fit(
             best_clf_model,
-            datamodule=self._datamodule,
+            datamodule=clf_datamodule,
         )
 
         validation_metrics = clf_trainer.validate(
-            best_clf_model, datamodule=self._datamodule
+            best_clf_model, datamodule=clf_datamodule
         )
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
         mlflow.log_metric(f"retrain_{self._config.optuna_metric}", retrain_metric)

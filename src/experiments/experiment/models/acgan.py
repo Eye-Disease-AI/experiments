@@ -143,8 +143,12 @@ class ACGANModule(L.LightningModule):
         plt.close(fig)
 
     def configure_optimizers(self):
-        optimizer_G = torch.optim.Adam(self.generator.parameters())
-        optimizer_D = torch.optim.Adam(self.discriminator.parameters())
+        optimizer_G = torch.optim.Adam(
+            self.generator.parameters(), lr=0.0002, betas=(0.5, 0.999)
+        )
+        optimizer_D = torch.optim.Adam(
+            self.discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999)
+        )
         return optimizer_G, optimizer_D
 
     def forward(self, noise: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
