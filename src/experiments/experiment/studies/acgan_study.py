@@ -90,11 +90,13 @@ class ACGANStudy(Study):
     def _create_clf_trainer(
         self,
         logger,
+        callbacks=None,
     ):
         return L.Trainer(
             max_epochs=self._config.max_clf_epochs,
             accelerator=self._config.device,
             logger=logger,
+            callbacks=callbacks,
             enable_progress_bar=True,
             enable_model_summary=False,
             enable_checkpointing=False,
@@ -134,7 +136,7 @@ class ACGANStudy(Study):
 
         clf_module: ConvNext = self._bake_clf_model_config(config).build()
         clf_logger: MLFlowLogger = get_logger(config.clf_model_config.class_name())
-        clf_trainer = self._create_clf_trainer(logger=clf_logger)
+        clf_trainer = self._create_clf_trainer(logger=clf_logger, callbacks=callbacks)
 
         print("Sampling from trained GAN to create augmented dataset")
 
