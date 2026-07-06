@@ -5,6 +5,7 @@ import lightning as L
 import mlflow
 import torch
 from dataset.hard_policy import HardPolicy
+from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers.mlflow import MLFlowLogger
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -57,6 +58,8 @@ class ACGANStudyConfig(StudyConfig):
     )
     max_clf_epochs: int = 100
     max_gen_epochs: int = 100
+    use_early_stopping: bool = True
+    early_stopping_patience: int = 5
 
     @override
     @staticmethod
@@ -113,6 +116,16 @@ class ACGANStudy(Study):
         max_epochs=None,
         callbacks=None,
     ):
+        callbacks = [] if callbacks is None else callbacks
+        if self._config.use_early_stopping:
+            callbacks.append(
+                EarlyStopping(
+                    monitor="val_loss",
+                    patience=self._config.early_stopping_patience,
+                    mode="min",
+                )
+            )
+
         return L.Trainer(
             max_epochs=(max_epochs or self._config.max_clf_epochs),
             accelerator=self._config.device,
