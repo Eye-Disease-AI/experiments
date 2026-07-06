@@ -80,7 +80,7 @@ class Study(ABC):
             path = f"{prefix}{f.name}"
             if isinstance(value, OptunaOptimised):
                 suggest = getattr(trial, f"suggest_{value.kind}")
-                out[path] = suggest(path, **value.kwargs)
+                out[path] = suggest(name=path, **value.kwargs)
             elif is_dataclass(value):
                 assert not isinstance(value, type)
                 out.update(self._suggest_params(trial, config=value, prefix=f"{path}."))
