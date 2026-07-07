@@ -5,14 +5,14 @@ from experiments.experiment.datamodules.mock_nuclear_cataract_datamodule import 
 )
 from experiments.experiment.models.mock_model import MockConvNextConfig
 import torch
-from experiments.experiment.studies.baseline_study import (
-    BaselineStudy,
-    BaselineStudyConfig,
+from experiments.experiment.studies.baseline_search_study import (
+    BaselineSearchStudy,
+    BaselineSearchStudyConfig,
 )
 from experiments.lib.reproducibility import get_trial_vals
 
 EXPERIMENT_NAME = "sanity-check-debug1236"
-study_config = BaselineStudyConfig(
+study_config = BaselineSearchStudyConfig(
     max_epochs=1,
     max_trials=1,
     experiment_name=EXPERIMENT_NAME,
@@ -26,7 +26,7 @@ study_config = BaselineStudyConfig(
 def main():
     torch.set_float32_matmul_precision("high")
 
-    study: BaselineStudy = study_config.build()
+    study: BaselineSearchStudy = study_config.build()
     print(f"\n{'=' * 60}")
     print(f"Study: {study.name}")
     print(f"{'=' * 60}\n")

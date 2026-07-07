@@ -1,13 +1,15 @@
 import torch
 
-from experiments.experiment.studies.baseline_study import BaselineStudyConfig
+from experiments.experiment.studies.baseline_search_study import (
+    BaselineSearchStudyConfig,
+)
 
 
 def main():
     torch.set_float32_matmul_precision("high")
 
-    baseline_study_config = BaselineStudyConfig(
-        experiment_name="baseline",
+    baseline_study_config = BaselineSearchStudyConfig(
+        experiment_name="baseline_search",
     )
     baseline_study = baseline_study_config.build()
 
