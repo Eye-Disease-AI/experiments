@@ -25,6 +25,7 @@ from experiments.lib.config_serializing import ClassConfig, OptunaOptimised
 @dataclass(frozen=True, kw_only=True)
 class StudyConfig(ClassConfig):
     experiment_name: str | None = None
+    study_suffix: str | None = None
     seed: int = 2137
     max_trials: int = 100
     log_every_n_epochs: int = 1
@@ -49,7 +50,13 @@ class Study(ABC):
         config: StudyConfig,
     ) -> None:
         self._config = config
-        self.name = f"{config.experiment_name}_{get_git_sha()}"
+        assert config.experiment_name
+        name = config.experiment_name
+        if config.study_suffix:
+            name += f"_{config.study_suffix}"
+        name += f"_{get_git_sha()}"
+        self.name = name
+
         stop_logs()
 
     @property
