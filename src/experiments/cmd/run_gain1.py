@@ -1,5 +1,3 @@
-import dataclasses
-
 import torch
 
 from dataset.hard_policy import HardPolicy
@@ -9,15 +7,14 @@ from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
 from experiments.experiment.models.gain_convnext import GAINConvNextConfig
 from experiments.experiment.studies.baseline_study import BaselineStudyConfig
 
-_baseline_model = BaselineStudyConfig().model_config
-
-exp_name = "gain_test___004"
+exp_name = "gain_test___006"
 studies = [
     BaselineStudyConfig(
-        experiment_name=f"{exp_name}",
+        experiment_name=exp_name,
+        study_suffix="baseline",
         datamodule_config=NuclearCataractDataModuleConfig(
-            hard_policy=HardPolicy.PASSTHROUGH,
-            cache=False,
+            hard_policy=HardPolicy.DOMINATE,
+            return_bboxes=True,
         ),
         model_config=GAINConvNextConfig(
             use_attention_mining=False,
@@ -27,10 +24,11 @@ studies = [
         max_epochs=10,
     ),
     BaselineStudyConfig(
-        experiment_name=f"{exp_name}_ES",
+        experiment_name=exp_name,
+        study_suffix="ES",
         datamodule_config=NuclearCataractDataModuleConfig(
-            hard_policy=HardPolicy.PASSTHROUGH,
-            cache=False,
+            hard_policy=HardPolicy.DOMINATE,
+            return_bboxes=True,
         ),
         model_config=GAINConvNextConfig(
             use_attention_mining=False,
@@ -40,10 +38,11 @@ studies = [
         max_epochs=10,
     ),
     BaselineStudyConfig(
-        experiment_name=f"{exp_name}_AM",
+        experiment_name=exp_name,
+        study_suffix="AM",
         datamodule_config=NuclearCataractDataModuleConfig(
-            hard_policy=HardPolicy.PASSTHROUGH,
-            cache=False,
+            hard_policy=HardPolicy.DOMINATE,
+            return_bboxes=True,
         ),
         model_config=GAINConvNextConfig(
             use_attention_mining=True,
@@ -53,10 +52,11 @@ studies = [
         max_epochs=10,
     ),
     BaselineStudyConfig(
-        experiment_name=f"{exp_name}_AM_ES",
+        experiment_name=exp_name,
+        study_suffix="AM_ES",
         datamodule_config=NuclearCataractDataModuleConfig(
-            hard_policy=HardPolicy.PASSTHROUGH,
-            cache=False,
+            hard_policy=HardPolicy.DOMINATE,
+            return_bboxes=True,
         ),
         model_config=GAINConvNextConfig(
             use_attention_mining=True,
