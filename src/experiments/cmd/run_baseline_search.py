@@ -2,7 +2,6 @@ from experiments.experiment.studies.baseline_search_study import (
     BaselineSearchStudyConfig,
 )
 
-
 def main():
     baseline_study_config = BaselineSearchStudyConfig(
         experiment_name="baseline_search",
