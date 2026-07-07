@@ -41,8 +41,8 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
 
 
 class NuclearCataractDataModule(DataModule):
-    DATASET_STD: list[float] = [0.229015, 0.1663, 0.106812]
-    DATASET_MEAN: list[float] = [0.281245, 0.243682, 0.220464]
+    DATASET_STD: list[float] = [0.281245, 0.243682, 0.220464]
+    DATASET_MEAN: list[float] = [0.229015, 0.1663, 0.106812]
 
     def __init__(
         self,
