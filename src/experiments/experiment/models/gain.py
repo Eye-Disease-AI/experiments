@@ -84,7 +84,6 @@ def interpolate_A(image: torch.Tensor, A: torch.Tensor):
 
 def gradcam_visualization(image: torch.Tensor, A_upsampled: torch.Tensor):
     a = A_upsampled.detach().cpu().numpy()
-    # turbo colormap -> RGB uint8 (replaces cv2.applyColorMap; cv2 is not a dependency here)
     heatmap = (matplotlib.colormaps["turbo"](a)[..., :3] * 255).astype(np.uint8)
     mean = torch.tensor(
         NuclearCataractDataModule.DATASET_MEAN, device=image.device, dtype=image.dtype
@@ -154,7 +153,8 @@ class GAINWrapperConfig(BaseClassifierModelConfig):
 class GAINWrapper(BaseClassifierModel):
     def __init__(self, config: GAINWrapperConfig):
         super().__init__(config)
-        target = _resolve_layer(self, config.target_layer)
+        self.config: GAINWrapperConfig = config
+        target = _resolve_layer(self, self.config.target_layer)
         _install_proxy(self, target, CapturingProxy(target))
 
     @property

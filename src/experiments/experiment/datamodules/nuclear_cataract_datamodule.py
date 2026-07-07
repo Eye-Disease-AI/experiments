@@ -33,6 +33,7 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     image_size: int = 224
     normalize: bool = False
     augment_rot_angle: float = 15
+    return_bboxes: bool = False
 
     @staticmethod
     @override
@@ -73,6 +74,7 @@ class NuclearCataractDataModule(DataModule):
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
                 self._cache_size(),
                 self._config.return_paths,
+                self._config.return_bboxes,
                 hard_policy=self._config.hard_policy,
             )
 
@@ -81,6 +83,7 @@ class NuclearCataractDataModule(DataModule):
                 NuclearCataractDataset.TestMode(),
                 self._cache_size(),
                 self._config.return_paths,
+                self._config.return_bboxes,
                 hard_policy=self._config.hard_policy,
             )
         train_transforms = [
@@ -122,14 +125,31 @@ class NuclearCataractDataModule(DataModule):
             self.test_set = _SubsetTransformer(test, transform=self.val_transform)
 
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
-            dataset, batch_size=self._batch_size, num_workers=0, pin_memory=True
+            dataset,
+            batch_size=self._batch_size,
+            num_workers=0,
+            pin_memory=True,
+            collate_fn=self._collate_fn,
         )
+
+    @staticmethod
+    def _collate_fn(batch):
+        # batch is a list of lists: [img, label, (path?), (bboxes?)]
+        images = torch.stack([b[0] for b in batch], dim=0)
+        labels = torch.as_tensor([b[1] for b in batch], dtype=torch.long)
+
+        # Figure out what fields are present
+        out = [images, labels]
+        for i in range(2, len(batch[0])):
+            out.append([b[i] for b in batch])
+        return tuple(out)
 
     def setup_fold(self, fold: int, num_folds: int) -> None:
         self.dataset = NuclearCataractDataset(
             NuclearCataractDataset.KFoldCVMode(num_folds),
             self._cache_size(),
             self._config.return_paths,
+            self._config.return_bboxes,
             hard_policy=self._config.hard_policy,
         )
         train = self.dataset.fold_train_set(fold)
