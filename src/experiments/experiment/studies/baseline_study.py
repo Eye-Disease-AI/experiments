@@ -15,7 +15,7 @@ class BaselineStudyConfig(BaselineSearchStudyConfig):
     # only override from parent
     # TODO use actual optuna-optimised values
     model_config: ConvNextConfig = ConvNextConfig(
-        learning_rate=5e-5, weight_decay=1e-4, dropout=0.2
+        learning_rate=5e-5, weight_decay=1e-8, dropout=0.2
     )
     # no optuna trials, just a reproduction of the baseline
     max_trials: int = 1
@@ -23,7 +23,7 @@ class BaselineStudyConfig(BaselineSearchStudyConfig):
     @override
     @staticmethod
     def get_configured_class():
-        return BaselineSearchStudy
+        return BaselineStudy
 
 
 class BaselineStudy(BaselineSearchStudy, KFoldValidatable):
