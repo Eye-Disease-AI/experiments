@@ -11,6 +11,7 @@ from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModule,
     NuclearCataractDataModuleConfig,
 )
+from experiments.experiment.models.base_classifier import BaseClassifierModelConfig
 from experiments.experiment.models.convnext import ConvNextConfig
 from experiments.experiment.callbacks import (
     BackboneFreezeCallback,
@@ -33,7 +34,7 @@ class BaselineSearchStudyConfig(StudyConfig):
         normalize=True,
         augment_rot_angle=15,
     )
-    model_config: ConvNextConfig = ConvNextConfig(
+    model_config: BaseClassifierModelConfig = ConvNextConfig(
         learning_rate=OptunaOptimised(
             "float", {"low": 1e-6, "high": 1e-4, "log": True}
         ),
@@ -78,7 +79,9 @@ class BaselineSearchStudy(Study, KFoldValidatable):
         config = self._set_config_optuna_params(params)
         self._datamodule.batch_size = config.datamodule_config.batch_size
 
-    def _bake_model_config(self, config: BaselineSearchStudyConfig) -> ConvNextConfig:
+    def _bake_model_config(
+        self, config: BaselineSearchStudyConfig
+    ) -> BaseClassifierModelConfig:
         # Inject datamodule-derived fields (only known at runtime) into the
         # resolved model config before building.
         return replace(
