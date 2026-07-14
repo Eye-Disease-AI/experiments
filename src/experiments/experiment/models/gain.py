@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchmetrics.detection import MeanAveragePrecision
 
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModule,
@@ -148,6 +149,7 @@ class GAINWrapperConfig(BaseClassifierModelConfig):
     use_attention_mining: bool = False
     use_external_supervision: bool = False
     gradcam_visualization_amount: int = 3
+    threshold_ratio: float = 0.2
 
 
 class GAINWrapper(BaseClassifierModel):
@@ -156,6 +158,10 @@ class GAINWrapper(BaseClassifierModel):
         self.config: GAINWrapperConfig = config
         target = _resolve_layer(self, self.config.target_layer)
         _install_proxy(self, target, CapturingProxy(target))
+
+        self.val_map = MeanAveragePrecision(box_format="xyxy", iou_type="bbox")
+        self.val_iou_sum = torch.zeros(())
+        self.val_iou_n = 0
 
     @property
     def _proxy(self) -> CapturingProxy:
@@ -234,3 +240,109 @@ class GAINWrapper(BaseClassifierModel):
             return 0
         H = boxes_batch_to_masks(boxes_batch, image_size, A.device)
         return F.mse_loss(A, H)
+
+    def _attention_to_segmentation_mask(self, A: torch.Tensor) -> torch.Tensor:
+        thresh = self.config.threshold_ratio * A.amax(dim=(1, 2), keepdim=True)
+        return (A >= thresh).float()
+
+    def mask_iou(
+        self, prediction_mask: torch.Tensor, true_mask: torch.Tensor
+    ) -> torch.Tensor:
+        p = prediction_mask.flatten(1).bool()
+        g = true_mask.flatten(1).bool()
+        inter = (p & g).sum(1).float()
+        union = (p | g).sum(1).float()
+        # Edge case for no labels
+        # if pred has a box but gt had none, completely invalid
+        # if gt has no box, and pred has no box, perfect
+        return torch.where(union == 0, torch.ones_like(union), inter / union)
+
+    def mask_to_box(self, m: torch.Tensor) -> torch.Tensor | None:
+        """Minimal box that covers the whole mask"""
+        ys, xs = torch.nonzero(m, as_tuple=True)
+        if xs.numel() == 0:
+            # no box if theres no non-zero mask pixels
+            return None
+        return torch.stack([xs.min(), ys.min(), xs.max(), ys.max()]).float()
+
+    def mean_average_precision(
+        self,
+        pred_mask: torch.Tensor,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        boxes: list[torch.Tensor],
+        logits: torch.Tensor,
+    ):
+        dev = pred_mask.device
+        probs = torch.softmax(logits, dim=1).detach()
+        H, W = x.shape[-2:]
+        scale = torch.tensor([W, H, W, H], device=dev)
+        preds, targets = [], []
+        for i in range(x.shape[0]):
+            # Converting to COCO format to use in torchvision.detection.MeanAveragePrecision
+            box = self.mask_to_box(pred_mask[i])
+            if box is None:
+                preds.append(
+                    {
+                        "boxes": torch.zeros(0, 4, device=dev),
+                        "scores": torch.zeros(0, device=dev),
+                        "labels": torch.zeros(0, dtype=torch.long, device=dev),
+                    }
+                )
+            else:
+                preds.append(
+                    {
+                        "boxes": box.unsqueeze(0),
+                        "scores": probs[i, y[i]].unsqueeze(0),
+                        "labels": y[i].unsqueeze(0),
+                    }
+                )
+            true_boxes = boxes[i].to(dev) * scale
+            targets.append(
+                {"boxes": true_boxes, "labels": y[i].repeat(len(true_boxes))}
+            )
+        # print("=== MAP debug ===")
+        # for i in range(min(3, len(preds))):
+        #     print(f"[{i}] scores {preds[i]['scores']} labels {preds[i]['labels']}"
+        #     print(f"    pred boxes {preds[i]['boxes'].shape}")
+        #     print(f"    pred box vals {preds[i]['boxes']}")
+        #     print(f"    true boxes {targets[i]['boxes'].shape} labels {targets[i]['labels']}")
+        #     print(f"    true box vals {targets[i]['boxes'][:2]}")
+        # self.val_map.update(preds, targets)
+
+    def validation_step(self, batch, batch_idx):
+        """Adding new metrics to the base classifier metrics"""
+        # Calculates original metrics
+        super().validation_step(batch, batch_idx)
+        x, y, *other = batch
+        boxes = other[0] if other else None
+        assert boxes
+        with (
+            torch.inference_mode(False),
+            torch.enable_grad(),
+        ):  # val has no grad, GradCAM needs it
+            # Need to clone the tensor in order to free it up from inference mode context
+            x = x.clone()
+            y = y.clone()
+            _, features, logits = self._classification_step(x, y)
+            A = normalize_attention(
+                interpolate_A(x, compute_gradcam(features, logits, y))
+            ).detach()
+        mask = self._attention_to_segmentation_mask(A)
+        gt_mask = boxes_batch_to_masks(boxes, x.shape[-2:], A.device)
+
+        self.val_iou_sum += self.mask_iou(mask, gt_mask).sum().cpu()  # sum over batch
+        self.val_iou_n += x.shape[0]
+
+        self.mean_average_precision(mask, x, y, boxes, logits)
+
+    def on_validation_epoch_end(self):
+        super().on_validation_epoch_end()
+
+        self.log("val_miou", self.val_iou_sum / max(self.val_iou_n, 1), prog_bar=True)
+        self.val_iou_sum = torch.zeros(())
+        self.val_iou_n = 0
+
+        m = self.val_map.compute()
+        self.log_dict({"val_map": m["map"], "val_map_50": m["map_50"]}, prog_bar=True)
+        self.val_map.reset()

@@ -23,7 +23,6 @@ studies = [
             use_external_supervision=False,
         ),
         max_trials=1,
-        max_epochs=10,
     ),
     BaselineSearchStudyConfig(
         experiment_name=exp_name,
@@ -37,7 +36,6 @@ studies = [
             use_external_supervision=True,
         ),
         max_trials=1,
-        max_epochs=10,
     ),
     BaselineSearchStudyConfig(
         experiment_name=exp_name,
@@ -51,7 +49,6 @@ studies = [
             use_external_supervision=False,
         ),
         max_trials=1,
-        max_epochs=10,
     ),
     BaselineSearchStudyConfig(
         experiment_name=exp_name,
@@ -65,7 +62,6 @@ studies = [
             use_external_supervision=True,
         ),
         max_trials=1,
-        max_epochs=10,
     ),
 ]
 
