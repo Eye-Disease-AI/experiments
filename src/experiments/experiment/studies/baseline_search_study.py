@@ -29,7 +29,7 @@ class BaselineSearchStudyConfig(StudyConfig):
         batch_size=OptunaOptimised("categorical", {"choices": [64]}),
         return_paths=False,
         cache=True,
-        hard_policy=HardPolicy.PASSTHROUGH,
+        hard_policy=HardPolicy.DOMINATE,
         image_size=224,
         normalize=True,
         augment_rot_angle=15,
@@ -41,12 +41,12 @@ class BaselineSearchStudyConfig(StudyConfig):
         weight_decay=OptunaOptimised("float", {"low": 1e-8, "high": 5e-2, "log": True}),
         dropout=OptunaOptimised("float", {"low": 0.0, "high": 0.5}),
     )
-    early_stopping_patience: int = 5
+    early_stopping_patience: int = 15
     backbone_unfreeze_mode: Literal["patience", "const_epochs"] = "const_epochs"
     backbone_unfreeze_num_epochs: int = 5
-    use_early_stopping: bool = True
+    use_early_stopping: bool = False
     use_freezing: bool = False
-    use_class_weights = True
+    use_class_weights = False
 
     @override
     @staticmethod
