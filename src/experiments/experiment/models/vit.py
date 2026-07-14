@@ -9,11 +9,12 @@ from experiments.experiment.models.base_classifier import (
     BaseClassifierModel,
     BaseClassifierModelConfig,
 )
+from experiments.lib.config_serializing import OptunaOptimised
 
 
 @dataclass(frozen=True, kw_only=True)
 class ViTConfig(BaseClassifierModelConfig):
-    dropout: float = 0.2
+    dropout: float | OptunaOptimised = 0.2
 
     @staticmethod
     @override
