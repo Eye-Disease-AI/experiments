@@ -7,6 +7,7 @@ from typing import Any, Literal, Protocol, override, runtime_checkable
 import lightning as L
 from matplotlib import pyplot as plt
 from optuna.visualization import plot_optimization_history, plot_param_importances
+import torch
 from experiments.experiment.datamodules.datamodule import DataModule
 import mlflow
 import optuna
@@ -32,6 +33,7 @@ class StudyConfig(ClassConfig):
     optuna_metric: str = "val_auroc"
     optuna_direction: Literal["min", "max"] = "max"
     gpu_precision: str = "bf16-mixed"
+    float32_matmul_precision: str = "medium"
     retrain_best: bool = True
     checkpoint_dir: str = "checkpoints"
     device: Literal["auto", "gpu", "cpu"] = "auto"
@@ -58,6 +60,7 @@ class Study(ABC):
         self.name = name
 
         stop_logs()
+        torch.set_float32_matmul_precision(config.float32_matmul_precision)
 
     @property
     def seed(self) -> int:

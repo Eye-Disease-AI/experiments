@@ -1,5 +1,3 @@
-import torch
-
 from experiments.experiment.models.convnext import ConvNextConfig
 from experiments.experiment.models.swin import SwinConfig
 from experiments.experiment.models.vit import ViTConfig
@@ -40,7 +38,6 @@ studies = [
 
 
 def main():
-    torch.set_float32_matmul_precision("high")
     for config in studies:
         study = config.build()
 

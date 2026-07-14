@@ -4,7 +4,6 @@ from experiments.experiment.datamodules.mock_nuclear_cataract_datamodule import 
     MockNuclearCataractDatamoduleConfig,
 )
 from experiments.experiment.models.mock_model import MockConvNextConfig
-import torch
 from experiments.experiment.studies.baseline_search_study import (
     BaselineSearchStudy,
     BaselineSearchStudyConfig,
@@ -24,8 +23,6 @@ study_config = BaselineSearchStudyConfig(
 
 
 def main():
-    torch.set_float32_matmul_precision("high")
-
     study: BaselineSearchStudy = study_config.build()
     print(f"\n{'=' * 60}")
     print(f"Study: {study.name}")
