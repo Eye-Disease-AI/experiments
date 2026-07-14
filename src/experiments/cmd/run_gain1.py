@@ -5,13 +5,13 @@ from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
 from experiments.experiment.models.gain_convnext import GAINConvNextConfig
-from experiments.experiment.studies.baseline_search_study import (
-    BaselineSearchStudyConfig,
+from experiments.experiment.studies.baseline_study import (
+    BaselineStudyConfig,
 )
 
 exp_name = "gain_test___007"
 studies = [
-    BaselineSearchStudyConfig(
+    BaselineStudyConfig(
         experiment_name=exp_name,
         study_suffix="baseline",
         datamodule_config=NuclearCataractDataModuleConfig(
@@ -24,7 +24,7 @@ studies = [
         ),
         max_trials=1,
     ),
-    BaselineSearchStudyConfig(
+    BaselineStudyConfig(
         experiment_name=exp_name,
         study_suffix="ES",
         datamodule_config=NuclearCataractDataModuleConfig(
@@ -37,7 +37,7 @@ studies = [
         ),
         max_trials=1,
     ),
-    BaselineSearchStudyConfig(
+    BaselineStudyConfig(
         experiment_name=exp_name,
         study_suffix="AM",
         datamodule_config=NuclearCataractDataModuleConfig(
@@ -50,7 +50,7 @@ studies = [
         ),
         max_trials=1,
     ),
-    BaselineSearchStudyConfig(
+    BaselineStudyConfig(
         experiment_name=exp_name,
         study_suffix="AM_ES",
         datamodule_config=NuclearCataractDataModuleConfig(
