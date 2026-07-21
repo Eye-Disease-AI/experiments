@@ -83,7 +83,7 @@ def interpolate_A(image: torch.Tensor, A: torch.Tensor):
     return A_upsampled
 
 
-def gradcam_visualization(image: torch.Tensor, A_upsampled: torch.Tensor):
+def gradcam_visualization(image: torch.Tensor, A_upsampled: torch.Tensor) -> np.ndarray:
     a = A_upsampled.detach().cpu().numpy()
     heatmap = (matplotlib.colormaps["turbo"](a)[..., :3] * 255).astype(np.uint8)
     mean = torch.tensor(
@@ -137,6 +137,19 @@ def _resolve_layer(root: nn.Module, keys):
     return obj
 
 
+def calculate_heatmaps(amount, x, A) -> dict[str, list[np.ndarray]]:
+    heatmaps = {}
+
+    # GradCAM
+    gradcam = []
+    for i in range(amount):
+        idx = i % len(x)
+        gradcam.append(gradcam_visualization(x[idx], A[idx]))
+
+    heatmaps["gradcam"] = gradcam
+    return heatmaps
+
+
 @dataclass(frozen=True, kw_only=True)
 class GAINWrapperConfig(BaseClassifierModelConfig):
     target_layer: tuple[str | int, ...] = ("model", "features", -2, -1)
@@ -145,7 +158,7 @@ class GAINWrapperConfig(BaseClassifierModelConfig):
     sigma_mask: float | OptunaOptimised = 0.5  # soft-threshold sigmoid center
     omega_mask: float | OptunaOptimised = 100.0  # soft-threshold sigmoid steepness
     warmup_epochs: int | OptunaOptimised = 0
-    calculate_attention_mining: bool = True
+    calculate_heatmaps: bool = True
     use_attention_mining: bool = False
     use_external_supervision: bool = False
     gradcam_visualization_amount: int = 3
@@ -185,16 +198,24 @@ class GAINWrapper(BaseClassifierModel):
             self.config.use_attention_mining
             and self.current_epoch >= self.config.warmup_epochs
         ):
-            L_am = self._attention_mining_loss(
-                x, A, y, log_gradcam=self.trainer.is_last_batch
-            )
+            L_am = self._attention_mining_loss(x, A, y)
             L_am = L_am * self.config.am_loss_weight
             losses["L_am"] = L_am
             total = total + L_am
         elif self.config.calculate_attention_mining:
-            _ = self._attention_mining_loss(
-                x, A, y, log_gradcam=self.trainer.is_last_batch
+            _ = self._attention_mining_loss(x, A, y)
+
+        if self.config.calculate_heatmaps and self.trainer.is_last_batch:
+            heatmaps = calculate_heatmaps(
+                self.config.gradcam_visualization_amount, x, A
             )
+            for name, heatmaps_of_type in heatmaps.items():
+                for i, heatmap in enumerate(heatmaps_of_type):
+                    self.logger.experiment.log_image(
+                        run_id=self.logger.run_id,
+                        image=heatmap,
+                        artifact_file=f"{name}/step_{self.global_step}_img{i}.png",
+                    )
 
         if self.config.use_external_supervision:
             L_e = self._external_supervision_loss(A, boxes, x.shape[-2:])
@@ -214,18 +235,8 @@ class GAINWrapper(BaseClassifierModel):
         loss_cl = self.loss_fn(logits, y)
         return loss_cl, proxy.captured, logits
 
-    def _attention_mining_loss(self, x, A, y, log_gradcam=False):
+    def _attention_mining_loss(self, x, A, y):
         """Second forward on masked image."""
-        if log_gradcam:
-            for i in range(self.config.gradcam_visualization_amount):
-                idx = i % len(x)
-                heatmap = gradcam_visualization(x[idx], A[idx])
-                self.logger.experiment.log_image(
-                    run_id=self.logger.run_id,
-                    image=heatmap,
-                    artifact_file=f"gradcam/step_{self.global_step}_img{i}.png",
-                )
-
         x_star = mask_image(x, A, self.config.sigma_mask, self.config.omega_mask)
         logits_star = self(x_star)
         probs_star = F.softmax(logits_star, dim=1)
