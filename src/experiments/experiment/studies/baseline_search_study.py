@@ -5,7 +5,7 @@ from typing import Any, Literal, override
 from dataset.hard_policy import HardPolicy
 import lightning as L
 import mlflow
-from lightning.pytorch.callbacks import EarlyStopping
+from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModule,
@@ -36,17 +36,19 @@ class BaselineSearchStudyConfig(StudyConfig):
     )
     model_config: BaseClassifierModelConfig = ConvNextConfig(
         learning_rate=OptunaOptimised(
-            "float", {"low": 1e-6, "high": 1e-4, "log": True}
+            "float", {"low": 1e-7, "high": 1e-3, "log": True}
         ),
-        weight_decay=OptunaOptimised("float", {"low": 1e-8, "high": 5e-2, "log": True}),
+        weight_decay=OptunaOptimised("float", {"low": 1e-8, "high": 1e-2, "log": True}),
         dropout=OptunaOptimised("float", {"low": 0.0, "high": 0.5}),
+        scheduler_max_t=max_epochs,
+        scheduler_min_lr=0,
     )
     early_stopping_patience: int = 15
     backbone_unfreeze_mode: Literal["patience", "const_epochs"] = "const_epochs"
-    backbone_unfreeze_num_epochs: int = 5
+    backbone_unfreeze_num_epochs: int = 10
     use_early_stopping: bool = False
-    use_freezing: bool = False
-    use_class_weights = False
+    use_freezing: bool = True
+    use_class_weights = True
 
     @override
     @staticmethod
@@ -114,6 +116,8 @@ class BaselineSearchStudy(Study, KFoldValidatable):
                     num_epochs=self._config.backbone_unfreeze_num_epochs,
                 )
             )
+
+        callbacks.append(LearningRateMonitor(logging_interval="epoch"))
 
         return L.Trainer(
             max_epochs=max_epochs or self._config.max_epochs,

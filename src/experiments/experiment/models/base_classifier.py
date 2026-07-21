@@ -28,7 +28,7 @@ class BaseClassifierModelConfig(ClassConfig):
         None  # serialize_class(torch.optim.lr_scheduler.CosineAnnealingLR)
     )
     scheduler_max_t: int = 40
-    scheduler_min_lr: float = 1e-6
+    scheduler_min_lr: float = 0
     backbone_lr_factor: float = 1
     n_classes: int = 2
     class_weights: list[float] | None = None
@@ -99,10 +99,15 @@ class BaseClassifierModel(L.LightningModule):
         head_params = [p for p in self.parameters() if id(p) not in backbone_ids]
         optimizer = self.optimizer(
             [
-                {"params": head_params, "lr": self.config.learning_rate},
+                {
+                    "params": head_params,
+                    "lr": self.config.learning_rate,
+                    "name": "head",
+                },
                 {
                     "params": backbone_params,
                     "lr": self.config.learning_rate * self.config.backbone_lr_factor,
+                    "name": "backbone",
                 },
             ],
             weight_decay=self.config.weight_decay,
