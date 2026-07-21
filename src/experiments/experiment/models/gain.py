@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import matplotlib
@@ -64,6 +65,24 @@ def compute_gradcam(
     return A
 
 
+HeatmapFn = Callable[[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]
+
+HEATMAP_METHODS: dict[str, HeatmapFn] = {
+    "gradcam": compute_gradcam,
+}
+
+
+def attention_map(
+    method: str,
+    image: torch.Tensor,
+    features: torch.Tensor,
+    logits: torch.Tensor,
+    target_classes: torch.Tensor,
+) -> torch.Tensor:  # [B, H, W], image-sized, normalized
+    A = HEATMAP_METHODS[method](features, logits, target_classes)
+    return normalize_attention(interpolate_A(image, A))
+
+
 def soft_threshold(A: torch.Tensor, sigma: float, omega: float) -> torch.Tensor:
     return torch.sigmoid(omega * (A - sigma))
 
@@ -78,7 +97,7 @@ def normalize_attention(A: torch.Tensor) -> torch.Tensor:
 
 def interpolate_A(image: torch.Tensor, A: torch.Tensor):
     A_upsampled = F.interpolate(
-        A.unsqueeze(1), size=image.shape[-2:], mode="bilinear", align_corners=False
+        A.unsqueeze(1), size=image.shape[-2:], mode="bicubic", align_corners=False
     ).squeeze(1)
     return A_upsampled
 
@@ -137,16 +156,15 @@ def _resolve_layer(root: nn.Module, keys):
     return obj
 
 
-def calculate_heatmaps(amount, x, A) -> dict[str, list[np.ndarray]]:
+def calculate_heatmaps(
+    methods, amount, x, features, logits, y
+) -> dict[str, list[np.ndarray]]:
     heatmaps = {}
-
-    # GradCAM
-    gradcam = []
-    for i in range(amount):
-        idx = i % len(x)
-        gradcam.append(gradcam_visualization(x[idx], A[idx]))
-
-    heatmaps["gradcam"] = gradcam
+    for name in methods:
+        A = attention_map(name, x, features, logits, y).detach()
+        heatmaps[name] = [
+            gradcam_visualization(x[i % len(x)], A[i % len(x)]) for i in range(amount)
+        ]
     return heatmaps
 
 
@@ -157,12 +175,27 @@ class GAINWrapperConfig(BaseClassifierModelConfig):
     es_loss_weight: float | OptunaOptimised = 1.0  # omega_e
     sigma_mask: float | OptunaOptimised = 0.5  # soft-threshold sigmoid center
     omega_mask: float | OptunaOptimised = 100.0  # soft-threshold sigmoid steepness
-    warmup_epochs: int | OptunaOptimised = 0
-    calculate_heatmaps: bool = True
+    warmup_epochs: int | OptunaOptimised = 0  # before AM/ES are added to loss
+    calculate_heatmaps: bool = True  # visualizations
     use_attention_mining: bool = False
     use_external_supervision: bool = False
-    gradcam_visualization_amount: int = 3
-    threshold_ratio: float = 0.2
+    gradcam_visualization_amount: int = 3  # images per epoch
+    threshold_ratio: float = 0.2  # for giving class labels to pixels for IoU/mAP
+    loss_heatmap_method: str = "gradcam"  # for AM/ES loss + val metrics
+    visualization_heatmap_methods: tuple[str, ...] = (
+        "gradcam",
+    )  # for visualization only
+
+    def post_init_checks(self):
+        unknown = {
+            self.loss_heatmap_method,
+            *self.visualization_heatmap_methods,
+        } - HEATMAP_METHODS.keys()
+        if unknown:
+            raise ValueError(
+                f"Unknown heatmap methods {sorted(unknown)}; "
+                f"available: {sorted(HEATMAP_METHODS)}"
+            )
 
 
 class GAINWrapper(BaseClassifierModel):
@@ -190,9 +223,7 @@ class GAINWrapper(BaseClassifierModel):
         losses = {"L_cl": loss_cl}
         total = loss_cl
 
-        A = compute_gradcam(features, logits, y)  # [B, h, w]
-        A = interpolate_A(x, A)
-        A = normalize_attention(A)
+        A = attention_map(self.config.loss_heatmap_method, x, features, logits, y)
 
         if (
             self.config.use_attention_mining
@@ -207,7 +238,12 @@ class GAINWrapper(BaseClassifierModel):
 
         if self.config.calculate_heatmaps and self.trainer.is_last_batch:
             heatmaps = calculate_heatmaps(
-                self.config.gradcam_visualization_amount, x, A
+                self.config.visualization_heatmap_methods,
+                self.config.gradcam_visualization_amount,
+                x,
+                features,
+                logits,
+                y,
             )
             for name, heatmaps_of_type in heatmaps.items():
                 for i, heatmap in enumerate(heatmaps_of_type):
@@ -336,8 +372,8 @@ class GAINWrapper(BaseClassifierModel):
             x = x.clone()
             y = y.clone()
             _, features, logits = self._classification_step(x, y)
-            A = normalize_attention(
-                interpolate_A(x, compute_gradcam(features, logits, y))
+            A = attention_map(
+                self.config.loss_heatmap_method, x, features, logits, y
             ).detach()
         mask = self._attention_to_segmentation_mask(A)
         gt_mask = boxes_batch_to_masks(boxes, x.shape[-2:], A.device)
