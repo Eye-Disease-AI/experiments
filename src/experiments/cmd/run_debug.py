@@ -1,5 +1,8 @@
 import pprint
 
+from experiments.experiment.augmentors.mock_nuclear_cataract_augmentor import (
+    MockNuclearCataractAugmentorConfig,
+)
 from experiments.experiment.datamodules.mock_nuclear_cataract_datamodule import (
     MockNuclearCataractDatamoduleConfig,
 )
@@ -16,7 +19,10 @@ study_config = BaselineSearchStudyConfig(
     max_trials=1,
     experiment_name=EXPERIMENT_NAME,
     datamodule_config=MockNuclearCataractDatamoduleConfig(
-        batch_size=10, dataset_len=10
+        batch_size=10,
+        dataset_len=10,
+        augmentor_config=MockNuclearCataractAugmentorConfig(),
+        n_augment=10,
     ),
     model_config=MockConvNextConfig(),
 )
