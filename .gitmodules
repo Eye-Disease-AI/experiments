@@ -1,3 +1,6 @@
 [submodule "dataset"]
 	path = packages/dataset
 	url = git@github.com:Eye-Disease-AI/dataset.git
+[submodule "packages/stylegan3"]
+	path = packages/stylegan3
+	url = git@github.com:Eye-Disease-AI/stylegan3.git
