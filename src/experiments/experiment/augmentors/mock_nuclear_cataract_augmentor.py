@@ -2,10 +2,10 @@ import os
 import subprocess
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
+from typing import override
 
 import torch
 from torchvision.io import read_image
-from typing_extensions import override
 
 from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
 
@@ -37,6 +37,7 @@ class MockNuclearCataractAugmentor(Augmentor):
                 subprocess.run(
                     f"head -c $(({img_bytes})) /dev/urandom | magick -size {img_size_str} -depth 8 rgb:- {noise_path}",
                     shell=True,
+                    check=True,
                 )
                 img = read_image(noise_path)
                 generated_images.append(img)
