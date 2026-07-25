@@ -1,4 +1,4 @@
-from pathlib import Path
+import torch
 
 from experiments.experiment.augmentors.stylegan_augmentor import (
     StyleganAugmentor,
@@ -6,9 +6,13 @@ from experiments.experiment.augmentors.stylegan_augmentor import (
 )
 
 if __name__ == "__main__":
-    sa = StyleganAugmentor(StyleganAugmentorConfig())
-    sa.upload_results_to_mlflow(
-        Path(
-            "/home/maciek/Desktop/masters/experiments3/packages/stylegan3/training-runs/00030-stylegan3-r-ncsg3-gpus1-batch12-gamma2"
-        )
-    )
+    # StyleganAugmentor.upload_results_to_mlflow(
+    #     Path(
+    #         "/home/maciek/Desktop/masters/experiments3/packages/stylegan3/training-runs/00030-stylegan3-r-ncsg3-gpus1-batch12-gamma2"
+    #     )
+    # )
+
+    c: StyleganAugmentor = StyleganAugmentorConfig.known_config_r().build()
+    random_labels = torch.randint(0, 2, [10])
+    gens = c.generate(random_labels)
+    print(gens.shape)

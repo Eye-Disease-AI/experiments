@@ -1,19 +1,24 @@
 import json
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import mlflow
+import mlflow.entities
 import torch
 from mlflow.entities import Metric, Param
 from PIL import Image
+from torchvision.io import read_image
 
 from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
 
-# Server-side batch limits, see mlflow.utils.validation
+REPO_ROOT = Path(__file__).resolve().parents[4]
+STYLEGAN3_PATH = REPO_ROOT / "packages" / "stylegan3"
 MAX_PARAMS_PER_BATCH = 100
 MAX_METRICS_PER_BATCH = 1000
 IMAGE_UPLOAD_WORKERS = 8
@@ -39,6 +44,21 @@ class StyleganAugmentorConfig(AugmentorConfig):
     # Not a command line argument, but important
     resolution: int
 
+    @staticmethod
+    def known_config_r() -> StyleganAugmentorConfig:
+        return StyleganAugmentorConfig(
+            kimg=1200,
+            gpus=1,
+            batch=12,
+            gamma=2,
+            batch_gpu=12,
+            snap=10,
+            metrics="fid20k_full",
+            cond=True,
+            cfg="stylegan3-r",
+            resolution=256,
+        )
+
     def query_params(self) -> list[tuple[str, str]]:
         if self.cfg == "stylegan3-r":
             use_radial_filters = True
@@ -57,11 +77,23 @@ class StyleganAugmentorConfig(AugmentorConfig):
             # I think that image_snapshot_ticks and network_snapshot_ticks are the same value
             ("image_snapshot_ticks", str(self.snap)),
             # I don't know if it will work for multiple metrics:
-            ("metrics", f'["{self.metrics}"]'),
+            ("metrics", f"['{self.metrics}']"),
             ("training_set_kwargs.use_labels", "True" if self.cond else "False"),
             ("G_kwargs.use_radial_filters", "True" if use_radial_filters else "False"),
             ("training_set_kwargs.resolution", str(self.resolution)),
         ]
+
+    def query_params_filter_string(self) -> str:
+        query_params = self.query_params()
+        param_filters = []
+
+        for param in query_params:
+            param_filters.append("params.'" + param[0] + "' = \"" + param[1] + '"')
+
+        filter_string = " and ".join(param_filters)
+        filter_string += "and attribute.status = 'FINISHED'"
+
+        return filter_string
 
     @staticmethod
     def get_configured_class():
@@ -69,6 +101,8 @@ class StyleganAugmentorConfig(AugmentorConfig):
 
 
 class StyleganAugmentor(Augmentor):
+    EXPERIMENT_NAME = "stylegan3"
+
     def __init__(self, config: StyleganAugmentorConfig):
         self.config = config
 
@@ -89,7 +123,7 @@ class StyleganAugmentor(Augmentor):
 
         stats_interval_steps = training_options_flat["kimg_per_tick"] * 1000
 
-        exp = Experiment("stylegan3")
+        exp = Experiment(StyleganAugmentor.EXPERIMENT_NAME)
 
         with mlflow.start_run() as run:
             params = [
@@ -213,5 +247,84 @@ class StyleganAugmentor(Augmentor):
             for metrics_batch in chunked(metrics, MAX_METRICS_PER_BATCH):
                 exp.client.log_batch(run.info.run_id, metrics=metrics_batch)
 
+    @staticmethod
+    def generate_cmdline(
+        weights_path: str, seeds: list[int], cls: int, out_dir: str
+    ) -> list[str]:
+        seeds_str: list[str] = [str(s) for s in seeds]
+        seeds_joined = ",".join(seeds_str)
+        return [
+            "uv",
+            "run",
+            f"{STYLEGAN3_PATH}/gen_images.py",
+            "--network",
+            f"{weights_path}",
+            "--seeds",
+            f"{seeds_joined}",
+            "--class",
+            f"{cls}",
+            "--outdir",
+            f"{out_dir}",
+        ]
+
     def generate(self, labels: torch.Tensor) -> torch.Tensor:
-        return torch.Tensor()
+        exp = Experiment(self.EXPERIMENT_NAME)
+        runs = exp.client.search_runs(
+            experiment_ids=[exp.mlflow_experiment.experiment_id],
+            filter_string=self.config.query_params_filter_string(),
+            order_by=["attributes.start_time DESC"],
+            max_results=1,
+        )
+
+        assert len(runs) == 1
+
+        run: mlflow.entities.Run = runs[0]
+        print(f"Found run with matching parameters: {run.info.run_name}")
+
+        best_snapshot_path = None
+        for art in exp.client.list_artifacts(run.info.run_id):
+            path = Path(art.path)
+            if path.name.startswith("network-snapshot-") and path.name.endswith(".pkl"):
+                best_snapshot_path = path
+
+        if best_snapshot_path:
+            print(f"Found best snapshot path: {best_snapshot_path}")
+        else:
+            raise RuntimeError("Could not found best snapshot in generate")
+
+        with TemporaryDirectory(prefix="stylegan3") as tmp_dir:
+            mlflow.artifacts.download_artifacts(
+                run_id=run.info.run_id,
+                artifact_path=str(best_snapshot_path),
+                dst_path=tmp_dir,
+            )
+            tmp_dir_best_snapshot_path = Path(tmp_dir) / best_snapshot_path.name
+            generations_dir = Path(tmp_dir) / "generations"
+            generations_dir.mkdir()
+
+            labels_seeds: dict[int, list[int]] = {}
+
+            for i, label in enumerate(labels.tolist()):
+                if label in labels_seeds:
+                    labels_seeds[label].append(i)
+                else:
+                    labels_seeds[label] = [i]
+
+            for label, seeds in labels_seeds.items():
+                cmd_line = self.generate_cmdline(
+                    weights_path=str(tmp_dir_best_snapshot_path),
+                    seeds=seeds,
+                    cls=label,
+                    out_dir=str(generations_dir),
+                )
+                subprocess.run(cmd_line, check=True)
+
+            generations_paths = []
+            for i in range(len(labels)):
+                generations_paths.append(generations_dir / f"seed{i:04d}.png")
+
+            generated_images = []
+            for path in generations_paths:
+                generated_images.append(read_image(path))
+
+        return torch.stack(generated_images)
