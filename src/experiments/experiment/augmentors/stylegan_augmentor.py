@@ -27,6 +27,42 @@ def chunked(items: list, size: int):
 
 @dataclass(frozen=True, kw_only=True)
 class StyleganAugmentorConfig(AugmentorConfig):
+    kimg: int
+    gpus: int
+    batch: int
+    gamma: float
+    batch_gpu: int
+    snap: int
+    metrics: str
+    cond: bool
+    cfg: str
+    # Not a command line argument, but important
+    resolution: int
+
+    def query_params(self) -> list[tuple[str, str]]:
+        if self.cfg == "stylegan3-r":
+            use_radial_filters = True
+        elif self.cfg == "stylegan3-t":
+            use_radial_filters = False
+        else:
+            raise RuntimeError(f"Unknown stylegan architecture (cfg = {self.cfg})")
+
+        return [
+            ("total_kimg", str(self.kimg)),
+            ("num_gpus", str(self.gpus)),
+            ("batch_size", str(self.batch)),
+            ("batch_gpu", str(self.batch_gpu)),
+            # Gamma float is not really safe to compare, but that is what stylegan gives us
+            ("loss_kwargs.r1_gamma", f"{self.gamma:.1f}"),
+            # I think that image_snapshot_ticks and network_snapshot_ticks are the same value
+            ("image_snapshot_ticks", str(self.snap)),
+            # I don't know if it will work for multiple metrics:
+            ("metrics", f'["{self.metrics}"]'),
+            ("training_set_kwargs.use_labels", "True" if self.cond else "False"),
+            ("G_kwargs.use_radial_filters", "True" if use_radial_filters else "False"),
+            ("training_set_kwargs.resolution", str(self.resolution)),
+        ]
+
     @staticmethod
     def get_configured_class():
         return StyleganAugmentor
