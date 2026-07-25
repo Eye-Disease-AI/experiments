@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import torch
 
 from experiments.experiment.augmentors.stylegan_augmentor import (
@@ -16,3 +17,5 @@ if __name__ == "__main__":
     random_labels = torch.randint(0, 2, [10])
     gens = c.generate(random_labels)
     print(gens.shape)
+    plt.imshow(gens[0].permute(1, 2, 0))
+    plt.savefig("probe.png")
