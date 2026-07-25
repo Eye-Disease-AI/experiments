@@ -1,14 +1,26 @@
 import json
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 
 import mlflow
 import torch
+from mlflow.entities import Metric, Param
 from PIL import Image
 
 from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
+
+# Server-side batch limits, see mlflow.utils.validation
+MAX_PARAMS_PER_BATCH = 100
+MAX_METRICS_PER_BATCH = 1000
+
+
+def chunked(items: list, size: int):
+    items_iter = iter(items)
+    while chunk := list(islice(items_iter, size)):
+        yield chunk
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -42,8 +54,13 @@ class StyleganAugmentor(Augmentor):
         exp = Experiment("stylegan3")
 
         with mlflow.start_run() as run:
-            for key in training_options_flat:
-                exp.client.log_param(run.info.run_id, key, training_options_flat[key])
+            params = [
+                Param(key, str(value)) for key, value in training_options_flat.items()
+            ]
+            for params_batch in chunked(params, MAX_PARAMS_PER_BATCH):
+                exp.client.log_batch(run.info.run_id, params=params_batch)
+
+            metrics: list[Metric] = []
 
             for path in train_run_dir_path.iterdir():
                 if (
@@ -57,12 +74,13 @@ class StyleganAugmentor(Augmentor):
                             line = json.loads(line_json)
                             metric_name = line["metric"]
                             metric_value = line["results"][metric_name]
-                            exp.client.log_metric(
-                                run_id=run.info.run_id,
-                                key=metric_name,
-                                value=metric_value,
-                                timestamp=int(line["timestamp"]),
-                                step=cur_step,
+                            metrics.append(
+                                Metric(
+                                    key=metric_name,
+                                    value=metric_value,
+                                    timestamp=int(line["timestamp"]),
+                                    step=cur_step,
+                                )
                             )
                             cur_step += validation_interval_steps
 
@@ -112,24 +130,29 @@ class StyleganAugmentor(Augmentor):
                             mean = line[stat]["mean"]
                             std = line[stat]["std"]
 
-                            exp.client.log_metric(
-                                run_id=run.info.run_id,
-                                key=f"{stat}/mean",
-                                value=mean,
-                                step=cur_step,
-                                timestamp=timestamp,
+                            metrics.append(
+                                Metric(
+                                    key=f"{stat}/mean",
+                                    value=mean,
+                                    timestamp=timestamp,
+                                    step=cur_step,
+                                )
                             )
-                            exp.client.log_metric(
-                                run_id=run.info.run_id,
-                                key=f"{stat}/std",
-                                value=std,
-                                step=cur_step,
-                                timestamp=timestamp,
+                            metrics.append(
+                                Metric(
+                                    key=f"{stat}/std",
+                                    value=std,
+                                    timestamp=timestamp,
+                                    step=cur_step,
+                                )
                             )
 
                         cur_step += stats_interval_steps
             else:
                 print("Warning: No stats.jsonl found")
+
+            for metrics_batch in chunked(metrics, MAX_METRICS_PER_BATCH):
+                exp.client.log_batch(run.info.run_id, metrics=metrics_batch)
 
     def generate(self, labels: torch.Tensor) -> torch.Tensor:
         return torch.Tensor()
