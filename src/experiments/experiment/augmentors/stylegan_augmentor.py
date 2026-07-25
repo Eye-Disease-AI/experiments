@@ -63,6 +63,9 @@ class StyleganAugmentor(Augmentor):
                 exp.client.log_batch(run.info.run_id, params=params_batch)
 
             metrics: list[Metric] = []
+            found_fid20k = False
+            best_fid20k = 0.0
+            best_snapshot = ""
 
             for path in train_run_dir_path.iterdir():
                 if (
@@ -76,6 +79,15 @@ class StyleganAugmentor(Augmentor):
                             line = json.loads(line_json)
                             metric_name = line["metric"]
                             metric_value = line["results"][metric_name]
+                            snapshot_pkl = line["snapshot_pkl"]
+
+                            if metric_name == "fid20k_full" and (
+                                metric_value < best_fid20k or not found_fid20k
+                            ):
+                                found_fid20k = True
+                                best_snapshot = snapshot_pkl
+                                best_fid20k = metric_value
+
                             metrics.append(
                                 Metric(
                                     key=metric_name,
@@ -85,6 +97,11 @@ class StyleganAugmentor(Augmentor):
                                 )
                             )
                             cur_step += validation_interval_steps
+
+            print("Logging best snapshot")
+            best_snapshot_path = train_run_dir_path / best_snapshot
+            exp.client.log_artifact(run.info.run_id, best_snapshot_path)
+            print("Best snapshot logged")
 
             # Images are uploaded one artifact request each, so do them in parallel
             with ThreadPoolExecutor(max_workers=IMAGE_UPLOAD_WORKERS) as executor:
