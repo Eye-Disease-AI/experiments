@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
@@ -15,6 +16,7 @@ from experiments.lib.mlflow_setup import Experiment
 # Server-side batch limits, see mlflow.utils.validation
 MAX_PARAMS_PER_BATCH = 100
 MAX_METRICS_PER_BATCH = 1000
+IMAGE_UPLOAD_WORKERS = 8
 
 
 def chunked(items: list, size: int):
@@ -84,36 +86,40 @@ class StyleganAugmentor(Augmentor):
                             )
                             cur_step += validation_interval_steps
 
-            for path in train_run_dir_path.iterdir():
-                if (
-                    path.is_file()
-                    and path.name.startswith("fakes")
-                    and path.name.endswith(".png")
-                ):
-                    try:
-                        image_step = int(
-                            path.name.removeprefix("fakes").removesuffix(".png")
-                        )
-                        exp.client.log_image(
-                            run_id=run.info.run_id,
-                            image=Image.open(path),
-                            key="fake_samples",
-                            step=image_step,
-                        )
-                    except ValueError:
-                        print(
-                            f"Skipping logging image of name {path.name}, because it can't be correlated with step number"
-                        )
+            # Images are uploaded one artifact request each, so do them in parallel
+            with ThreadPoolExecutor(max_workers=IMAGE_UPLOAD_WORKERS) as executor:
+                for path in train_run_dir_path.iterdir():
+                    if (
+                        path.is_file()
+                        and path.name.startswith("fakes")
+                        and path.name.endswith(".png")
+                    ):
+                        try:
+                            image_step = int(
+                                path.name.removeprefix("fakes").removesuffix(".png")
+                            )
+                            executor.submit(
+                                exp.client.log_image,
+                                run_id=run.info.run_id,
+                                image=Image.open(path),
+                                key="fake_samples",
+                                step=image_step,
+                            )
+                        except ValueError:
+                            print(
+                                f"Skipping logging image of name {path.name}, because it can't be correlated with step number"
+                            )
 
-            reals_path = train_run_dir_path / "reals.png"
-            if reals_path.exists():
-                exp.client.log_image(
-                    run_id=run.info.run_id,
-                    image=Image.open(reals_path),
-                    key="reals",
-                )
-            else:
-                print("Warning: No reals.png found")
+                reals_path = train_run_dir_path / "reals.png"
+                if reals_path.exists():
+                    executor.submit(
+                        exp.client.log_image,
+                        run_id=run.info.run_id,
+                        image=Image.open(reals_path),
+                        key="reals",
+                    )
+                else:
+                    print("Warning: No reals.png found")
 
             stats_path = train_run_dir_path / "stats.jsonl"
             if stats_path.exists():
