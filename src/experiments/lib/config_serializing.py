@@ -60,20 +60,20 @@ class ClassConfig(ABC):
         return self
 
     @staticmethod
-    def _flatten_dict(d, prefix=""):
+    def flatten_dict(d, prefix=""):
         out = {}
         for k, v in d.items():
             key = f"{prefix}{k}"
             if v is None:
                 continue  # optional params skipped instead of logging lots of None
             if isinstance(v, dict):
-                out.update(ClassConfig._flatten_dict(v, key + "."))
+                out.update(ClassConfig.flatten_dict(v, key + "."))
             else:
                 out[key] = v
         return out
 
     def serialize_config(self):
-        return ClassConfig._flatten_dict(ClassConfig.to_dict(self))
+        return ClassConfig.flatten_dict(ClassConfig.to_dict(self))
 
     def build(self):
         self.post_init_checks()
