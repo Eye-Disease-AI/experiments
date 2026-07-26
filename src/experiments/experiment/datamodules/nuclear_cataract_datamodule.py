@@ -1,14 +1,19 @@
 import math
 import os
 from dataclasses import dataclass
+from typing import override
 
 import numpy as np
 import torch
 from dataset.hard_policy import HardPolicyType
 from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
-from typing_extensions import override
 
+from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
+from experiments.experiment.augmentors.dataset_utils import (
+    AugmentedDataset,
+    FakeDataset,
+)
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.lib.config_serializing import OptunaOptimised
 
@@ -34,6 +39,8 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     image_size: int = 224
     normalize: bool = False
     augment_rot_angle: float = 15
+    augmentor_config: AugmentorConfig | None = None
+    n_augment: int | None = None
 
     @staticmethod
     @override
@@ -114,7 +121,26 @@ class NuclearCataractDataModule(DataModule):
         self.val_transform = transformsv2.Compose(val_transforms)
 
         if not hasattr(self, "train_set"):
-            train = self.dataset.train_set()
+            if self.config.augmentor_config and self.config.n_augment:
+                augmentor: Augmentor = self.config.augmentor_config.build()
+                n_classes = self.dataset.n_classes
+                fake_labels = torch.randint(0, n_classes, [self.config.n_augment])
+                fake_images = augmentor.generate(fake_labels)
+                fake_set = FakeDataset(
+                    fake_images,
+                    fake_labels,
+                    transformsv2.Compose(
+                        [
+                            transformsv2.Resize(self._config.image_size),
+                            transformsv2.ToDtype(torch.float32),
+                        ]
+                    ),
+                )
+                real_set = self.dataset.train_set()
+                train = AugmentedDataset([real_set, fake_set])
+            else:
+                train = self.dataset.train_set()
+
             self.train_class_weights = train.class_weights()
             val = self.dataset.val_set()
             test = self.test_dataset.test_set()
