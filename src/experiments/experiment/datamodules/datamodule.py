@@ -1,15 +1,19 @@
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+
 import lightning as L
 import torch
 from torch.utils.data.dataloader import DataLoader
 
+from experiments.experiment.augmentors.augmentor import AugmentorConfig
 from experiments.lib.config_serializing import ClassConfig, OptunaOptimised
 
 
 @dataclass(frozen=True, kw_only=True)
 class DataModuleConfig(ClassConfig):
     batch_size: int | OptunaOptimised = 64
+    augmentor_config: AugmentorConfig | None = None
+    n_augment: int | None = None
 
 
 class DataModule(ABC, L.LightningDataModule):

@@ -9,7 +9,7 @@ from dataset.hard_policy import HardPolicyType
 from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
-from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
+from experiments.experiment.augmentors.augmentor import Augmentor
 from experiments.experiment.augmentors.dataset_utils import (
     AugmentedDataset,
     FakeDataset,
@@ -39,8 +39,6 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     image_size: int = 224
     normalize: bool = False
     augment_rot_angle: float = 15
-    augmentor_config: AugmentorConfig | None = None
-    n_augment: int | None = None
 
     @staticmethod
     @override
