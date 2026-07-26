@@ -2,21 +2,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Literal, override
 
-from dataset.hard_policy import HardPolicy
 import lightning as L
 import mlflow
+from dataset.hard_policy import HardPolicy
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
+from experiments.experiment.callbacks import (
+    BackboneFreezeCallback,
+)
+from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModule,
     NuclearCataractDataModuleConfig,
 )
 from experiments.experiment.models.base_classifier import BaseClassifierModelConfig
 from experiments.experiment.models.convnext import ConvNextConfig
-from experiments.experiment.callbacks import (
-    BackboneFreezeCallback,
-)
-from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
 from experiments.lib.config_serializing import OptunaOptimised
 from experiments.lib.reproducibility import global_seed_rng
