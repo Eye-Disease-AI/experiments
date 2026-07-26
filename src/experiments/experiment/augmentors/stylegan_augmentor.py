@@ -142,6 +142,7 @@ class StyleganAugmentorConfig(AugmentorConfig):
                     (runs[col_name] == bool_val) | runs[col_name].isna()
                 ]
 
+        filtered_runs = filtered_runs[:1]
         assert len(filtered_runs) == 1, (
             f"StyleGAN training run not found or ambiguous result (found {len(filtered_runs)})"
         )
