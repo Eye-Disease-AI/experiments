@@ -11,6 +11,7 @@ requires-python = ">=3.14"
 dependencies = [
     "dataset",
     "stylegan3",
+    "tacgan",
     "kaleido>=1.3.0",
     "lightning>=2.6.1",
     "matplotlib>=3.10.8",
@@ -40,3 +41,4 @@ members = ["packages/*"]
 [tool.uv.sources]
 dataset = { workspace = true }
 stylegan3 = { workspace = true }
+tacgan = { workspace = true }

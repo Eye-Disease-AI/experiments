@@ -4,3 +4,6 @@
 [submodule "packages/stylegan3"]
 	path = packages/stylegan3
 	url = git@github.com:Eye-Disease-AI/stylegan3.git
+[submodule "packages/tacgan"]
+	path = packages/tacgan
+	url = git@github.com:Eye-Disease-AI/tac-gan.git
