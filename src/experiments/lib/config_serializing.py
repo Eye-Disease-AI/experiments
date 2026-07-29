@@ -1,3 +1,4 @@
+import copy
 import importlib
 import json
 from abc import ABC
@@ -109,6 +110,22 @@ class ClassConfig(ABC):
         c = ClassConfig.from_dict(json.loads(s))
         assert isinstance(c, ClassConfig)
         return c
+
+    @classmethod
+    def from_other(cls, other: ClassConfig, **overrides):
+        """Create an instance of `cls` by copying field values from `other`,
+        asserting every copied field exists on `cls`."""
+        target_fields = {f.name for f in fields(cls)}
+        kwds = {}
+        for f in fields(other):
+            if f.name == "configured_class":
+                continue  # set automatically in __post_init__
+            assert f.name in target_fields, (
+                f"Field '{f.name}' from {type(other).__name__} does not exist on {cls.__name__}"
+            )
+            kwds[f.name] = copy.deepcopy(getattr(other, f.name))
+        kwds.update(overrides)
+        return cls(**kwds)
 
 
 def deserialize_class(path: str | None) -> Any:
