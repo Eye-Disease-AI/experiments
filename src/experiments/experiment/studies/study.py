@@ -39,7 +39,8 @@ class StudyConfig(ClassConfig):
     device: Literal["auto", "gpu", "cpu"] = "auto"
 
     @override
-    def post_init_checks(self):
+    def validate_config(self):
+        super().validate_config()
         if not self.experiment_name:
             raise Exception(f"experiment_name is {self.experiment_name}")
 

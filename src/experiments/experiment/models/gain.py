@@ -186,7 +186,8 @@ class GAINWrapperConfig(BaseClassifierModelConfig):
         "gradcam",
     )  # for visualization only
 
-    def post_init_checks(self):
+    def validate_config(self):
+        super().validate_config()
         unknown = {
             self.loss_heatmap_method,
             *self.visualization_heatmap_methods,

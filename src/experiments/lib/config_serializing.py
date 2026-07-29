@@ -29,7 +29,7 @@ class ClassConfig(ABC):
         """Friendly class name without the whole path"""
         return str(self.configured_class).split(".")[-1]
 
-    def post_init_checks(self): ...
+    def validate_config(self): ...
 
     def __post_init__(self):
         object.__setattr__(
@@ -37,7 +37,6 @@ class ClassConfig(ABC):
             "configured_class",
             serialize_class(self.get_configured_class()),
         )
-        self.post_init_checks()
 
     def to_dict(self, save_class=False):
         if is_dataclass(self):
@@ -72,7 +71,7 @@ class ClassConfig(ABC):
         return ClassConfig._flatten_dict(ClassConfig.to_dict(self))
 
     def build(self):
-        self.post_init_checks()
+        self.validate_config()
         if not self.configured_class:
             raise Exception("fConfigured class not set (={self.configured_class}).")
         return deserialize_class(self.configured_class)(self)
