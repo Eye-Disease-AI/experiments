@@ -12,10 +12,11 @@ from experiments.experiment.studies.study import KFoldValidatable
 
 @dataclass(frozen=True, kw_only=True)
 class BaselineStudyConfig(BaselineSearchStudyConfig):
-    # only override from parent
-    # TODO use actual optuna-optimised values
+    # optimised values: baseline_model_search_convnext_4160e993df7b
     model_config: ConvNextConfig = ConvNextConfig(
-        learning_rate=5e-5, weight_decay=1e-8, dropout=0.2
+        learning_rate=8.759615455801614e-05,
+        weight_decay=0.565268242196509e-08,
+        dropout=0.15595523137824943,
     )
     # no optuna trials, just a reproduction of the baseline
     max_trials: int = 1
