@@ -111,7 +111,7 @@ def gradcam_visualization(image: torch.Tensor, A_upsampled: torch.Tensor) -> np.
     std = torch.tensor(
         NuclearCataractDataModule.DATASET_STD, device=image.device, dtype=image.dtype
     ).view(-1, 1, 1)
-    denorm = image * std + mean
+    denorm = image.detach() * std + mean
     img_np = (denorm.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
     alpha = (a * 0.5)[..., None]
     overlay = img_np * (1 - alpha) + heatmap * alpha
@@ -220,6 +220,10 @@ class GAINWrapper(BaseClassifierModel):
         """Integrate all losses during training"""
         x, y, *other = batch
         boxes = other[0] if other else None
+        # GradCAM needs grad on features and backbone freezing prevents that.
+        # setting input to require grad makes intermediate gradients to be
+        # calcualted without unfreezig the intermediate layers
+        x = x.requires_grad_(True)
         loss_cl, features, logits = self._classification_step(x, y)
         losses = {"L_cl": loss_cl}
         total = loss_cl
@@ -234,8 +238,6 @@ class GAINWrapper(BaseClassifierModel):
             L_am = L_am * self.config.am_loss_weight
             losses["L_am"] = L_am
             total = total + L_am
-        elif self.config.calculate_attention_mining:
-            _ = self._attention_mining_loss(x, A, y)
 
         if self.config.calculate_heatmaps and self.trainer.is_last_batch:
             heatmaps = calculate_heatmaps(
@@ -370,8 +372,8 @@ class GAINWrapper(BaseClassifierModel):
             torch.enable_grad(),
         ):  # val has no grad, GradCAM needs it
             # Need to clone the tensor in order to free it up from inference mode context
-            x = x.clone()
-            y = y.clone()
+            x: torch.Tensor = x.clone().requires_grad_(True)
+            y: torch.Tensor = y.clone()
             _, features, logits = self._classification_step(x, y)
             A = attention_map(
                 self.config.loss_heatmap_method, x, features, logits, y

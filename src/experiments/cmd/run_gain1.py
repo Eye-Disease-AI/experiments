@@ -6,13 +6,15 @@ from experiments.experiment.studies.baseline_study import (
     BaselineStudyConfig,
 )
 
+
 def dmc():
     return NuclearCataractDataModuleConfig.from_other(
         BaselineStudyConfig().datamodule_config,
         return_bboxes=True,
     )
 
-exp_name = "gain_test_0008"
+
+exp_name = "gain1"
 studies = [
     BaselineStudyConfig(
         experiment_name=exp_name,
