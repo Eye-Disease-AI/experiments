@@ -97,7 +97,7 @@ def normalize_attention(A: torch.Tensor) -> torch.Tensor:
 
 def interpolate_A(image: torch.Tensor, A: torch.Tensor):
     A_upsampled = F.interpolate(
-        A.unsqueeze(1), size=image.shape[-2:], mode="bicubic", align_corners=False
+        A.unsqueeze(1), size=image.shape[-2:], mode="bilinear", align_corners=False
     ).squeeze(1)
     return A_upsampled
 
