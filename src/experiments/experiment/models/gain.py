@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import matplotlib
 import numpy as np
@@ -176,9 +176,7 @@ def calculate_heatmaps(
 
 @dataclass(frozen=True, kw_only=True)
 class GAINWrapperConfig(BaseClassifierModelConfig):
-    target_layers: list[tuple[str | int, ...]] = field(
-        default_factory=lambda: [("model", "features", -2, -1)]
-    )
+    target_layers: list[tuple[str | int, ...]]
     am_loss_weight: float | OptunaOptimised = 1.0  # alpha
     es_loss_weight: float | OptunaOptimised = 1.0  # omega_e
     sigma_mask: float | OptunaOptimised = 0.5  # soft-threshold sigmoid center
