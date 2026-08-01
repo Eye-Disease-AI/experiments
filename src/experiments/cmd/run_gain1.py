@@ -14,7 +14,7 @@ def dmc():
     )
 
 
-exp_name = "gain1"
+exp_name = "gain1_ablation"
 studies = [
     BaselineStudyConfig(
         experiment_name=exp_name,
@@ -62,8 +62,6 @@ studies = [
 def main():
     for study in studies:
         study = study.build()
-
-        print("Running baseline study...")
         study.run()
 
 
