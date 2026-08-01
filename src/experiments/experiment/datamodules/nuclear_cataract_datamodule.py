@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 import os
 from dataset.hard_policy import HardPolicyType
@@ -34,6 +34,7 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     normalize: bool = False
     augment_rot_angle: float = 15
     return_bboxes: bool = False
+    bboxes_ratio: float = 1.0
 
     @staticmethod
     @override
@@ -66,6 +67,33 @@ class NuclearCataractDataModule(DataModule):
         return int(
             math.ceil(self._config.image_size * (math.sin(max_rad) + math.cos(max_rad)))
         )
+
+    def _select_bbox_drops(self, ratio, subset) -> set[int] | None:
+        n_total = len(subset)
+        box_idxs = [i for i, b in enumerate(subset.bboxes) if b.numel() > 0]
+        n_boxes = len(box_idxs)
+        target = round(ratio * n_total)
+        n_drop = max(0, n_boxes - target)
+        if n_drop == 0:
+            return None
+        perm = torch.randperm(n_boxes)
+        return {box_idxs[j] for j in perm[:n_drop].tolist()}
+
+    @staticmethod
+    def boxes_ratio(train_set: _SubsetTransformer) -> float:
+        """Fraction of samples still carrying a bbox"""
+        bboxes = train_set.subset.bboxes
+        dropped = train_set.drop_bbox or set()
+        have = sum(b.numel() > 0 and i not in dropped for i, b in enumerate(bboxes))
+        return have / len(bboxes)
+
+    def _make_train_set(self, train) -> _SubsetTransformer:
+        drop = (
+            self._select_bbox_drops(self._config.bboxes_ratio, train)
+            if self._config.return_bboxes
+            else None
+        )
+        return _SubsetTransformer(train, transform=self.transform, drop_bbox=drop)
 
     @override
     def setup(self, stage: str | None = None):
@@ -120,7 +148,7 @@ class NuclearCataractDataModule(DataModule):
             val = self.dataset.val_set()
             test = self.test_dataset.test_set()
 
-            self.train_set = _SubsetTransformer(train, transform=self.transform)
+            self.train_set = self._make_train_set(train)
             self.val_set = _SubsetTransformer(val, transform=self.val_transform)
             self.test_set = _SubsetTransformer(test, transform=self.val_transform)
 
@@ -155,7 +183,7 @@ class NuclearCataractDataModule(DataModule):
         train = self.dataset.fold_train_set(fold)
         val = self.dataset.fold_val_set(fold)
         self.train_class_weights = train.class_weights()
-        self.train_set = _SubsetTransformer(train, transform=self.transform)
+        self.train_set = self._make_train_set(train)
         self.val_set = _SubsetTransformer(val, transform=self.val_transform)
 
     @override
@@ -205,10 +233,11 @@ class NuclearCataractDataModule(DataModule):
 class _SubsetTransformer(torch.utils.data.Dataset):
     """Wrapper for subset that allows applying different transforms on each dataset subset (train, val, test)"""
 
-    def __init__(self, subset, transform=None, cache=True):
+    def __init__(self, subset, transform=None, cache=True, drop_bbox=None):
         self.subset = subset
         self.transform = transform
         self.do_cache = cache
+        self.drop_bbox = drop_bbox
 
     def __len__(self):
         return len(self.subset)
@@ -220,6 +249,8 @@ class _SubsetTransformer(torch.utils.data.Dataset):
             sample = self.transform(sample)
         result = [sample]
         result += list(data[1:])
+        if self.drop_bbox is not None and idx in self.drop_bbox:
+            result[-1] = torch.zeros((0, 4))
         return tuple(result)
 
 
@@ -229,18 +260,32 @@ if __name__ == "__main__":
 
     seed = 2137
     global_seed_rng(seed)
-
-    datamodule = NuclearCataractDataModule(
-        NuclearCataractDataModuleConfig(
-            batch_size=16,
-            return_paths=True,
-            cache=False,
-            hard_policy=HardPolicy.PASSTHROUGH,
-            image_size=224,
-            normalize=False,
-            augment_rot_angle=15,
-        )
+    c = NuclearCataractDataModuleConfig(
+        batch_size=16,
+        return_paths=True,
+        cache=False,
+        hard_policy=HardPolicy.PASSTHROUGH,
+        image_size=224,
+        normalize=False,
+        augment_rot_angle=15,
     )
+
+    print("Verifying whether providing bbox ratio works correctly")
+    d1: NuclearCataractDataModule = replace(c, return_bboxes=True).build()
+    d1.prepare_data()
+    d1.setup()
+    max_ratio = NuclearCataractDataModule.boxes_ratio(d1.train_set)
+    for p in [i / 10 for i in range(10, -1, -1)]:
+        d: NuclearCataractDataModule = replace(
+            c, return_bboxes=True, bboxes_ratio=p
+        ).build()
+        d.prepare_data()
+        d.setup()
+        ratio = NuclearCataractDataModule.boxes_ratio(d.train_set)
+        print(ratio)
+        assert abs(ratio - p) < 0.05 or (p >= max_ratio and ratio == max_ratio)
+
+    datamodule = c.build()
     datamodule.prepare_data()
     datamodule.setup()
 
