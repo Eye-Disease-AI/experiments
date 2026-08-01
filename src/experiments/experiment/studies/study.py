@@ -5,6 +5,9 @@ import os
 import tempfile
 from typing import Any, Literal, Protocol, override, runtime_checkable
 import lightning as L
+import matplotlib
+
+matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 from optuna.visualization import plot_optimization_history, plot_param_importances
 import torch
