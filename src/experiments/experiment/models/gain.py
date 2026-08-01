@@ -358,7 +358,7 @@ class GAINWrapper(BaseClassifierModel):
         #     print(f"    pred box vals {preds[i]['boxes']}")
         #     print(f"    true boxes {targets[i]['boxes'].shape} labels {targets[i]['labels']}")
         #     print(f"    true box vals {targets[i]['boxes'][:2]}")
-        # self.val_map.update(preds, targets)
+        self.val_map.update(preds, targets)
 
     def validation_step(self, batch, batch_idx):
         """Adding new metrics to the base classifier metrics"""
