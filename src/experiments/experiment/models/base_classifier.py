@@ -66,6 +66,22 @@ class BaseClassifierModel(L.LightningModule):
                 ),
             }
         )
+        self.val_metrics_per_class = MetricCollection(
+            {
+                "val_precision": MulticlassPrecision(
+                    num_classes=self.config.n_classes, average=None
+                ),
+                "val_recall": MulticlassRecall(
+                    num_classes=self.config.n_classes, average=None
+                ),
+                "val_auroc": MulticlassAUROC(
+                    num_classes=self.config.n_classes, average=None
+                ),
+                "val_f1": MulticlassF1Score(
+                    num_classes=self.config.n_classes, average=None
+                ),
+            }
+        )
         self._val_probs: list[torch.Tensor] = []
         self._val_targets: list[torch.Tensor] = []
         self._last_all_probs = None
@@ -95,6 +111,17 @@ class BaseClassifierModel(L.LightningModule):
 
         self.log_dict(self.val_metrics(all_probs, all_targets), prog_bar=True)
         self.val_metrics.reset()
+
+        per_class = self.val_metrics_per_class(all_probs, all_targets)
+        self.log_dict(
+            {
+                f"{name}_class_{i}": v[i]
+                for name, v in per_class.items()
+                for i in range(self.config.n_classes)
+            },
+            prog_bar=False,
+        )
+        self.val_metrics_per_class.reset()
 
         self._last_all_probs = all_probs.cpu()
         self._last_all_targets = all_targets.cpu()
