@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import matplotlib
 import numpy as np
@@ -43,10 +43,10 @@ def _install_proxy(root: nn.Module, target: nn.Module, proxy: nn.Module) -> None
 
 
 def compute_gradcam(
-    features: torch.Tensor,  # [B, K, H, W]
+    features: list[torch.Tensor],  # L x [B, K, H, W]
     logits: torch.Tensor,  # [B, n_classes]
     target_classes: torch.Tensor,  # [B]
-) -> torch.Tensor:  # [B, H, W]
+) -> list[torch.Tensor]:  # L x [B, H, W]
     # per-class logits: s^c for every sample
     # for every image get just the target class logit
     s_c = logits.gather(1, target_classes.unsqueeze(1)).squeeze(1)  # [B]
@@ -56,16 +56,21 @@ def compute_gradcam(
     # class score gradient over activation
     grads = torch.autograd.grad(
         outputs=score, inputs=features, create_graph=True, retain_graph=True
-    )[0]  # [B, K, H, W]
+    )  # L x [B, K, H, W]
+    maps = []
+    for feats, grad in zip(features, grads):
+        weights = grad.mean(dim=(2, 3))
+        # Attention map A^c
+        A = F.relu((weights[:, :, None, None] * feats).sum(dim=1))
+        maps.append(A)
+    return maps
 
-    weights = grads.mean(dim=(2, 3))
 
-    # Attention map A^c
-    A = F.relu((weights[:, :, None, None] * features).sum(dim=1))
-    return A
-
-
-HeatmapFn = Callable[[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]
+# Receives: list of batched layer activations, batched output logits (1-hot), batched true classes
+# returns list of batched heatmaps
+HeatmapFn = Callable[
+    [list[torch.Tensor], torch.Tensor, torch.Tensor], list[torch.Tensor]
+]
 
 HEATMAP_METHODS: dict[str, HeatmapFn] = {
     "gradcam": compute_gradcam,
@@ -79,8 +84,9 @@ def attention_map(
     logits: torch.Tensor,
     target_classes: torch.Tensor,
 ) -> torch.Tensor:  # [B, H, W], image-sized, normalized
-    A = HEATMAP_METHODS[method](features, logits, target_classes)
-    return normalize_attention(interpolate_A(image, A))
+    maps = HEATMAP_METHODS[method](features, logits, target_classes)
+    s = sum([normalize_attention(interpolate_A(image, A)) for A in maps])
+    return normalize_attention(s)
 
 
 def soft_threshold(A: torch.Tensor, sigma: float, omega: float) -> torch.Tensor:
@@ -148,7 +154,7 @@ def boxes_batch_to_masks(
     return torch.stack([boxes_to_mask(b, image_size, device) for b in boxes_batch])
 
 
-def _resolve_layer(root: nn.Module, keys):
+def _resolve_layer(root: nn.Module, keys) -> nn.Module:
     """Resolve a target layer by a sequence of keys (str -> getattr, int -> index)."""
     obj = root
     for k in keys:
@@ -157,7 +163,7 @@ def _resolve_layer(root: nn.Module, keys):
 
 
 def calculate_heatmaps(
-    methods, amount, x, features, logits, y
+    methods: list[str], amount, x, features: list[torch.Tensor], logits, y
 ) -> dict[str, list[np.ndarray]]:
     heatmaps = {}
     for name in methods:
@@ -170,7 +176,9 @@ def calculate_heatmaps(
 
 @dataclass(frozen=True, kw_only=True)
 class GAINWrapperConfig(BaseClassifierModelConfig):
-    target_layer: tuple[str | int, ...] = ("model", "features", -2, -1)
+    target_layers: list[tuple[str | int, ...]] = field(
+        default_factory=lambda: [("model", "features", -2, -1)]
+    )
     am_loss_weight: float | OptunaOptimised = 1.0  # alpha
     es_loss_weight: float | OptunaOptimised = 1.0  # omega_e
     sigma_mask: float | OptunaOptimised = 0.5  # soft-threshold sigmoid center
@@ -203,18 +211,17 @@ class GAINWrapper(BaseClassifierModel):
     def __init__(self, config: GAINWrapperConfig):
         super().__init__(config)
         self.config: GAINWrapperConfig = config
-        target = _resolve_layer(self, self.config.target_layer)
-        _install_proxy(self, target, CapturingProxy(target))
+        for path in self.config.target_layers:
+            target = _resolve_layer(self, path)
+            _install_proxy(self, target, CapturingProxy(target))
 
         self.val_map = MeanAveragePrecision(box_format="xyxy", iou_type="bbox")
         self.val_iou_sum = torch.zeros(())
         self.val_iou_n = 0
 
     @property
-    def _proxy(self) -> CapturingProxy:
-        # Re-resolved instead of stored: registering the proxy as an attribute
-        # would duplicate its parameters in state_dict.
-        return _resolve_layer(self, self.config.target_layer)
+    def _proxies(self) -> list[CapturingProxy]:
+        return [_resolve_layer(self, path) for path in self.config.target_layers]
 
     def training_step(self, batch, batch_idx):
         """Integrate all losses during training"""
@@ -268,11 +275,13 @@ class GAINWrapper(BaseClassifierModel):
 
     def _classification_step(self, x, y):
         """Classification loss and extracting the features along the way"""
-        proxy = self._proxy
-        proxy.captured = torch.empty(0)
-        logits = self(x)
+        proxies = self._proxies
+        for p in proxies:
+            # clearing proxies
+            p.captured = torch.empty(0)
+        logits = self(x)  # proxies capture the activations after forward pass
         loss_cl = self.loss_fn(logits, y)
-        return loss_cl, proxy.captured, logits
+        return loss_cl, [p.captured for p in proxies], logits
 
     def _attention_mining_loss(self, x, A, y):
         """Second forward on masked image."""

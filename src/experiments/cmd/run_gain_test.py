@@ -9,7 +9,7 @@ from experiments.experiment.studies.baseline_search_study import (
     BaselineSearchStudyConfig,
 )
 
-exp_name = "gain_test___012"
+exp_name = "gain_test_000b"
 studies = [
     BaselineSearchStudyConfig(
         experiment_name=exp_name,
@@ -21,6 +21,12 @@ studies = [
         model_config=GAINConvNextConfig(
             use_attention_mining=True,
             use_external_supervision=True,
+            target_layers=[
+                ("model", "features", 7),
+                ("model", "features", 5),
+                ("model", "features", 3),
+                ("model", "features", 1),
+            ],
         ),
         max_trials=1,
         max_epochs=2,
