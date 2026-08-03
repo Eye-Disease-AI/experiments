@@ -12,8 +12,10 @@ def calculate_ci(
 ) -> dict:
     arr = np.array(values)
     mean = np.mean(arr)
+    median = np.median(arr)
     alpha = (1 - ci) / 2
     standard_error = stats.sem(arr)
+    std = np.std(arr, ddof=1)
 
     # bootstrap simulation,
     # It randomly draws the values of metrics with return
@@ -41,18 +43,21 @@ def calculate_ci(
     # z-score
     z_st_ci_low, z_st_ci_high = stats.norm.interval(ci, loc=mean, scale=standard_error)
     out = {
-        "mean": np.mean(arr),
-        "median": np.median(arr),
-        "std": np.std(arr),
+        "mean": mean,
+        "median": median,
+        "std": std,
         "t_st_ci_low": t_st_ci_low,
         "t_st_ci_high": t_st_ci_high,
+        "t_st_ci_width": t_st_ci_high - t_st_ci_low,
         "z_st_ci_low": z_st_ci_low,
         "z_st_ci_high": z_st_ci_high,
+        "z_st_ci_width": z_st_ci_high - z_st_ci_low,
     }
     if do_bootstrap_simulation:
         out |= {
             "bstrap_ci_low": bstrap_ci_low,
             "bstrap_ci_high": bstrap_ci_high,
+            "bstrap_ci_width": bstrap_ci_high - bstrap_ci_low,
         }
     out |= {"n": len(arr)}
     return out
@@ -67,14 +72,20 @@ def print_ci(vals, metric_name, optuna_metric, do_bootstrap_simulation=False):
         ("Mean:", f"{ci['mean']:.4f}"),
         ("Median:", f"{ci['median']:.4f}"),
         ("Std:", f"{ci['std']:.4f}"),
-        ("Z-score 95% CI:", f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}]"),
-        ("T-student 95% CI:", f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}]"),
+        (
+            "Z-score 95% CI:",
+            f"[{ci['z_st_ci_low']:.4f}, {ci['z_st_ci_high']:.4f}], +- {ci['z_st_ci_width'] / 2:.4f}",
+        ),
+        (
+            "T-student 95% CI:",
+            f"[{ci['t_st_ci_low']:.4f}, {ci['t_st_ci_high']:.4f}], +- {ci['t_st_ci_width'] / 2:.4f}",
+        ),
     ]
     if do_bootstrap_simulation:
         rows.append(
             (
                 "Bootstrap 95% CI:",
-                f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}]",
+                f"[{ci['bstrap_ci_low']:.4f}, {ci['bstrap_ci_high']:.4f}], +- {ci['bstrap_ci_width'] / 2:.4f}",
             )
         )
     print(f"\n--- {metric_name}{marker} ---")
