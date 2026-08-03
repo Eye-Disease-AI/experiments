@@ -8,13 +8,13 @@ from tempfile import TemporaryDirectory
 
 import mlflow
 import mlflow.entities
-import pandas
 import torch
 from mlflow.entities import Metric, Param
 from PIL import Image
 from torchvision.io import read_image
 
 from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
+from experiments.experiment.augmentors.common import find_run
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
 
@@ -98,57 +98,6 @@ class StyleganAugmentorConfig(AugmentorConfig):
             ("G_kwargs.use_radial_filters", "True" if use_radial_filters else "False"),
             ("training_set_kwargs.resolution", str(self.resolution)),
         ]
-
-    def query_params_filter_string(self, query_params) -> str:
-        param_filters = []
-
-        for param in query_params:
-            if param[1] in ["True", "False"]:
-                raise RuntimeError("Filter string does not support bool filtering")
-            param_filters.append("params.'" + param[0] + "' = \"" + param[1] + '"')
-
-        filter_string = " and ".join(param_filters)
-        filter_string += "and attribute.status = 'FINISHED'"
-
-        return filter_string
-
-    def find_run(self, exp: Experiment) -> mlflow.entities.Run:
-        query_params = self.query_params()
-        non_bool_params = []
-        bool_params = []
-
-        for param in query_params:
-            if param[1] in ("True", "False"):
-                bool_params.append(param)
-            else:
-                non_bool_params.append(param)
-
-        filter_string = self.query_params_filter_string(non_bool_params)
-        # mlflow paginates internally and we don't have to it ourselves
-        runs = mlflow.search_runs(
-            experiment_ids=[exp.mlflow_experiment.experiment_id],
-            filter_string=filter_string,
-            order_by=["attributes.start_time DESC"],
-        )
-        assert isinstance(runs, pandas.DataFrame)
-
-        for bool_name, bool_val in bool_params:
-            col_name = f"params.{bool_name}"
-
-            if bool_val == "True":
-                filtered_runs = runs[runs[col_name] == bool_val]
-            elif bool_val == "False":
-                filtered_runs = runs[
-                    (runs[col_name] == bool_val) | runs[col_name].isna()
-                ]
-
-        filtered_runs = filtered_runs[:1]
-        assert len(filtered_runs) == 1, (
-            f"StyleGAN training run not found or ambiguous result (found {len(filtered_runs)})"
-        )
-
-        run_id = filtered_runs["run_id"].iloc[0]  # type: ignore
-        return exp.client.get_run(run_id)
 
     @staticmethod
     def get_configured_class():
@@ -325,7 +274,8 @@ class StyleganAugmentor(Augmentor):
     def generate(self, labels: torch.Tensor) -> torch.Tensor:
         # Activate experiment
         exp = Experiment(self.EXPERIMENT_NAME)
-        run: mlflow.entities.Run = self.config.find_run(exp)
+        query_params = self.config.query_params()
+        run: mlflow.entities.Run = find_run(query_params, exp)
         print(f"Found run with matching parameters: {run.info.run_name}")
 
         best_snapshot_path = None

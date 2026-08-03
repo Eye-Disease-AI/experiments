@@ -1,9 +1,7 @@
 import argparse
 from dataclasses import replace
 
-import matplotlib.pyplot as plt
-import torch
-
+from experiments.experiment.augmentors import common
 from experiments.experiment.augmentors.augmentor import Augmentor
 from experiments.experiment.augmentors.stylegan_augmentor import (
     StyleganAugmentorConfig,
@@ -50,11 +48,7 @@ def run_experiments(variant: str):
 
 
 def sample_augmentor(augmentor: Augmentor, variant: str):
-    gens = augmentor.generate(torch.Tensor([0, 1]).to(dtype=torch.long))
-    for i, gen in enumerate(gens):
-        gen_perm = gen.permute(1, 2, 0)
-        plt.imshow(gen_perm)
-        plt.savefig(f"stylegan_{variant}_class{i}.png")
+    common.sample_augmentor(augmentor, f"stylegan_{variant}")
 
 
 def sample(variant: str):
