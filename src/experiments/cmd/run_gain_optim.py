@@ -24,10 +24,14 @@ studies = [
         model_config=GAINConvNextConfig(
             use_attention_mining=True,
             use_external_supervision=True,
-            am_loss_weight=OptunaOptimised("float", {"low": 0, "high": 2, "log": True}),
-            es_loss_weight=OptunaOptimised("float", {"low": 0, "high": 2, "log": True}),
-            sigma_mask=OptunaOptimised("float", {"low": 0, "high": 1, "log": True}),
-            omega_mask=OptunaOptimised("float", {"low": 0, "high": 200, "log": True}),
+            am_loss_weight=OptunaOptimised(
+                "float", {"low": 0, "high": 10, "log": False}
+            ),
+            es_loss_weight=OptunaOptimised(
+                "float", {"low": 0, "high": 10, "log": False}
+            ),
+            sigma_mask=OptunaOptimised("float", {"low": 0.1, "high": 1, "log": False}),
+            omega_mask=OptunaOptimised("float", {"low": 1, "high": 200, "log": False}),
         ),
         max_trials=100,
     ),
