@@ -5,10 +5,9 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 from torchvision.transforms.v2 import Compose, Resize, ToDtype
 
-from experiments.experiment.augmentors.fake_dataset import FakeDataset
+from experiments.experiment.augmentors.dataset_utils import FakeDataset
 from experiments.experiment.augmentors.mock_nuclear_cataract_augmentor import (
     MockNuclearCataractAugmentor,
-    MockNuclearCataractAugmentorConfig,
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.lib.config_serializing import OptunaOptimised
@@ -20,8 +19,6 @@ class MockNuclearCataractDatamoduleConfig(DataModuleConfig):
     n_classes: int = 2
     class_names: list[str] = field(default_factory=lambda: ["mock_1", "mock_2"])
     dataset_len: int = 100
-    augmentor_config: MockNuclearCataractAugmentorConfig | None
-    n_augment: int | None
 
     @staticmethod
     @override
