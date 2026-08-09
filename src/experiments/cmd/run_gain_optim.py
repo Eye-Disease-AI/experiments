@@ -15,7 +15,7 @@ def dmc():
     )
 
 
-exp_name = "gain1_ablation"
+exp_name = "gain1_optim"
 studies = [
     BaselineStudyConfig(
         experiment_name=exp_name,
