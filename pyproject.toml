@@ -23,6 +23,7 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "seaborn>=0.13.2",
     "torch>=2.11.0",
+    "torchmetrics>=1.8.2",
     "torchvision>=0.26.0",
 ]
 
@@ -30,6 +31,7 @@ dependencies = [
 all = "experiments.cmd.run_all:main"
 baseline = "experiments.cmd.run_baseline:main"
 debug = "experiments.cmd.run_debug:main"
+lpips = "experiments.cmd.run_lpips:main"
 
 [tool.basedpyright]
 typeCheckingMode = "basic"

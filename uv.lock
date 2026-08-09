@@ -601,6 +601,7 @@ dependencies = [
     { name = "stylegan3" },
     { name = "tacgan" },
     { name = "torch" },
+    { name = "torchmetrics" },
     { name = "torchvision" },
 ]
 
@@ -620,6 +621,7 @@ requires-dist = [
     { name = "stylegan3", virtual = "packages/stylegan3" },
     { name = "tacgan", virtual = "packages/tacgan" },
     { name = "torch", specifier = ">=2.11.0" },
+    { name = "torchmetrics", specifier = ">=1.8.2" },
     { name = "torchvision", specifier = ">=0.26.0" },
 ]
 
