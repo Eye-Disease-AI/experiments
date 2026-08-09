@@ -4,8 +4,29 @@ import mlflow.entities
 import pandas
 import torch
 
-from experiments.experiment.augmentors.augmentor import Augmentor
+from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
 from experiments.lib.mlflow_setup import Experiment
+
+
+def create_augmentor(config: str) -> AugmentorConfig:
+    from experiments.experiment.augmentors.stylegan_augmentor import (
+        StyleganAugmentorConfig,
+    )
+    from experiments.experiment.augmentors.tacgan_augmentor import (
+        TacganAugmentorConfig,
+    )
+
+    if config == "stylegan-r":
+        return StyleganAugmentorConfig.known_config_r()
+    if config == "stylegan-t":
+        return StyleganAugmentorConfig.known_config_t()
+    if config == "tacgan-ac":
+        return TacganAugmentorConfig.known_config_ac()
+    if config == "tacgan-tac1":
+        return TacganAugmentorConfig.known_config_tac1()
+    if config == "tacgan-tac2":
+        return TacganAugmentorConfig.known_config_tac2()
+    raise RuntimeError("unknown config")
 
 
 def query_params_filter_string(query_params) -> str:

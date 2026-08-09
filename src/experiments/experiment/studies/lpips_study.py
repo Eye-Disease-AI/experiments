@@ -1,45 +1,53 @@
-from dataclasses import dataclass
-from typing import Any, Literal, override
+from dataclasses import dataclass, replace
+from random import choice
+from typing import Any, Literal, cast, override
 
 import lightning as L
-import mlflow
-import optuna
 import torch
-from optuna.trial import TrialState
-from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from dataset.hard_policy import HardPolicy
+from torch.utils.data import DataLoader, TensorDataset
 from torchvision.transforms import v2 as transforms
 
-from experiments.experiment.augmentors.augmentor import Augmentor, AugmentorConfig
-from experiments.experiment.datamodules.datamodule import DataModule
+from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
+from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
+    NuclearCataractDataModuleConfig,
+)
+from experiments.experiment.models.lpips import LPIPSModule, LPIPSModuleConfig
 from experiments.experiment.studies.study import Study, StudyConfig
-from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.reproducibility import global_seed_rng
+
+REAL_DATAMODULE_CONFIG = NuclearCataractDataModuleConfig(
+    batch_size=64,
+    return_paths=False,
+    cache=True,
+    hard_policy=HardPolicy.DOMINATE,
+    image_size=224,
+    normalize=False,
+    augment_rot_angle=0,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
 class LPIPSStudyConfig(StudyConfig):
     experiment_name: str = "lpips"
-    augmentor_config: AugmentorConfig | None = None
+    first_datamodule_config: DataModuleConfig = REAL_DATAMODULE_CONFIG
+    second_datamodule_config: DataModuleConfig = REAL_DATAMODULE_CONFIG
+    model_config: LPIPSModuleConfig = LPIPSModuleConfig()
     n_samples: int = 1000
     batch_size: int = 16
-    n_classes: int = 2
-    net_type: Literal["alex", "squeeze", "vgg"] = "alex"
+    image_size: int = 224
     max_trials: int = 1
     optuna_metric: str = "lpips"
-    optuna_direction: Literal["min", "max"] = "max"
+    optuna_direction: Literal["min", "max"] = "min"
     retrain_best: bool = False
 
     @override
     def post_init_checks(self):
         super().post_init_checks()
-        if self.augmentor_config is None:
-            raise ValueError("LPIPS requires augmentor_config")
         if self.n_samples <= 0:
             raise ValueError("LPIPS requires n_samples > 0")
         if self.batch_size <= 0:
             raise ValueError("LPIPS requires batch_size > 0")
-        if self.n_classes <= 0:
-            raise ValueError("LPIPS requires n_classes > 0")
 
     @override
     @staticmethod
@@ -49,18 +57,20 @@ class LPIPSStudyConfig(StudyConfig):
 
 class LPIPSStudy(Study):
     _config: LPIPSStudyConfig
-    _results: dict[str, float]
 
-    def __init__(
-        self,
-        config: LPIPSStudyConfig,
-    ):
+    def __init__(self, config: LPIPSStudyConfig):
         super().__init__(config)
         self._config = config
 
     @override
     def _init_datamodules(self) -> list[DataModule]:
-        return []
+        self._first_datamodule: DataModule = (
+            self._config.first_datamodule_config.build()
+        )
+        self._second_datamodule: DataModule = (
+            self._config.second_datamodule_config.build()
+        )
+        return [self._first_datamodule, self._second_datamodule]
 
     @override
     def _configure_datamodules(self, params: dict[str, Any]) -> None:
@@ -68,98 +78,77 @@ class LPIPSStudy(Study):
 
     @override
     def _train(self, params: dict[str, Any], get_logger, callbacks) -> None:
-        self._results = self._calculate()
-        mlflow.log_metrics(self._results)
+        self._evaluate(get_logger, callbacks)
 
     @override
     def _retrain(
-        self,
-        get_logger,
-        best_params: dict,
-        best_epoch: int,
-        callbacks: list,
+        self, get_logger, best_params: dict, best_epoch: int, callbacks: list
     ) -> tuple[L.Trainer, Any]:
-        raise NotImplementedError("LPIPSStudy does not retrain a model")
+        return self._evaluate(get_logger, callbacks)
 
-    def _device(self) -> torch.device:
-        if self._config.device == "gpu":
-            if not torch.cuda.is_available():
-                raise RuntimeError("LPIPS device='gpu' requires CUDA")
-            return torch.device("cuda")
-        if self._config.device == "auto" and torch.cuda.is_available():
-            return torch.device("cuda")
-        return torch.device("cpu")
+    def _images_by_class(self, datamodule: DataModule) -> list[list[torch.Tensor]]:
+        result: list[list[torch.Tensor]] = [[] for _ in range(datamodule.n_classes)]
 
-    @staticmethod
-    def _prepare_images(images: torch.Tensor, device: torch.device) -> torch.Tensor:
-        if images.ndim != 4 or images.shape[1] != 3:
-            raise ValueError(
-                f"LPIPS expects images shaped (N, 3, H, W), got {tuple(images.shape)}"
+        for images, labels, *_ in datamodule.val_dataloader():
+            for image, label in zip(images, labels, strict=True):
+                result[label.item()].append(image)
+
+        return result
+
+    def _image_pairs(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if self._first_datamodule.n_classes != self._second_datamodule.n_classes:
+            raise ValueError("LPIPS datamodules must have the same number of classes")
+
+        first_by_class = self._images_by_class(self._first_datamodule)
+        second_by_class = self._images_by_class(self._second_datamodule)
+
+        # Check if all classes are present in the datasets
+        for class_index in range(self._first_datamodule.n_classes):
+            assert first_by_class[class_index], (
+                f"Not enough images in first dataset class {class_index}"
             )
-        images = transforms.ToDtype(torch.float32, scale=True)(images)
-        images = images.clamp(0, 1).mul(2).sub(1)
-        return images.to(device)
-
-    def _calculate(self) -> dict[str, float]:
-        config = self._config
-        assert config.augmentor_config is not None
-        global_seed_rng(config.seed)
-        augmentor: Augmentor = config.augmentor_config.build()
-        device = self._device()
-        metric = LearnedPerceptualImagePatchSimilarity(
-            net_type=config.net_type, reduction="none", normalize=False
-        ).to(device)
-
-        labels = torch.arange(config.n_samples, dtype=torch.long) % config.n_classes
-        generated_images = augmentor.generate(torch.cat([labels, labels]))
-        first_images, second_images = generated_images.split(config.n_samples)
-
-        distance_batches = []
-        for start in range(0, config.n_samples, config.batch_size):
-            end = min(start + config.batch_size, config.n_samples)
-            first = self._prepare_images(first_images[start:end], device)
-            second = self._prepare_images(second_images[start:end], device)
-            distance_batches.append(metric(first, second).reshape(-1).detach().cpu())
-
-        distances = torch.cat(distance_batches)
-        results = {"lpips": distances.mean().item()}
-        for class_index in range(config.n_classes):
-            results[f"lpips_class_{class_index}"] = (
-                distances[labels == class_index].mean().item()
+            assert second_by_class[class_index], (
+                f"No images in second dataset class {class_index}"
             )
 
-        return results
+        labels = torch.arange(self._config.n_samples) % self._first_datamodule.n_classes
+        pairs = []
+        for label in labels.tolist():
+            pairs.append(
+                (choice(first_by_class[label]), choice(second_by_class[label]))
+            )
+        first, second = zip(*pairs, strict=True)
+        return torch.stack(first), torch.stack(second), labels
 
-    @override
-    def run(self) -> tuple[Experiment, optuna.Study]:
-        config = self._config
-        mlflow_experiment, optuna_study, parent_run, already_complete = (
-            self._setup_optuna_study(max_trials=config.max_trials)
+    def _evaluate(self, get_logger, callbacks) -> tuple[L.Trainer, Any]:
+        global_seed_rng(self._config.seed)
+        first, second, labels = self._image_pairs()
+        transform = transforms.Compose(
+            [
+                transforms.ToDtype(torch.float32, scale=True),
+                transforms.Resize((self._config.image_size, self._config.image_size)),
+            ]
         )
-        if already_complete:
-            return mlflow_experiment, optuna_study
-
-        try:
-            n_finished = sum(
-                trial.state in (TrialState.COMPLETE, TrialState.PRUNED)
-                for trial in optuna_study.trials
-            )
-            for _ in range(config.max_trials - n_finished):
-                trial = optuna_study.ask()
-                try:
-                    with mlflow.start_run(
-                        run_name=f"trial-{trial.number}", nested=True
-                    ):
-                        mlflow.set_tag("optuna_study", self.name)
-                        mlflow.set_tag("optuna_trial", trial.number)
-                        mlflow.log_params(config.serialize_config())
-                        self._train({}, None, [])
-                        trial.set_user_attr("metrics", self._results)
-                    optuna_study.tell(trial, self._results[config.optuna_metric])
-                except Exception:
-                    optuna_study.tell(trial, state=TrialState.FAIL)
-                    raise
-        finally:
-            mlflow.end_run()
-
-        return mlflow_experiment, optuna_study
+        first = transform(first).clamp(0, 1)
+        second = transform(second).clamp(0, 1)
+        dataloader = DataLoader(
+            TensorDataset(first, second, labels),
+            batch_size=self._config.batch_size,
+        )
+        model_config = replace(
+            self._config.model_config,
+            n_classes=self._first_datamodule.n_classes,
+        )
+        model: LPIPSModule = model_config.build()
+        trainer = L.Trainer(
+            accelerator=self._config.device,
+            logger=get_logger(model_config.class_name()),
+            callbacks=callbacks,
+            enable_progress_bar=True,
+            enable_model_summary=False,
+            enable_checkpointing=False,
+            precision=cast(Any, self._config.gpu_precision),
+            deterministic=True,
+        )
+        metrics = trainer.validate(model, dataloaders=dataloader)
+        return trainer, metrics

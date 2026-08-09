@@ -1,29 +1,8 @@
 import argparse
 from dataclasses import replace
 
-from experiments.experiment.augmentors.augmentor import AugmentorConfig
-from experiments.experiment.augmentors.stylegan_augmentor import (
-    StyleganAugmentorConfig,
-)
-from experiments.experiment.augmentors.tacgan_augmentor import (
-    TacganAugmentorConfig,
-)
+from experiments.experiment.augmentors.common import create_augmentor
 from experiments.experiment.studies.cas_study import CASStudyConfig
-
-
-def create_augmentor(config: str) -> AugmentorConfig:
-    if config == "stylegan-r":
-        return StyleganAugmentorConfig.known_config_r()
-    elif config == "stylegan-t":
-        return StyleganAugmentorConfig.known_config_t()
-    elif config == "tacgan-ac":
-        return TacganAugmentorConfig.known_config_ac()
-    elif config == "tacgan-tac1":
-        return TacganAugmentorConfig.known_config_tac1()
-    elif config == "tacgan-tac2":
-        return TacganAugmentorConfig.known_config_tac2()
-    else:
-        raise RuntimeError("unknown config")
 
 
 def run_experiments(config: str, n_augment: int):
