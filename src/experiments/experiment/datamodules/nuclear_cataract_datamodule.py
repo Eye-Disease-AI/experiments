@@ -76,12 +76,20 @@ class NuclearCataractDataModule(DataModule):
     @override
     def setup(self, stage: str | None = None):
         if not hasattr(self, "dataset"):
-            self.dataset = NuclearCataractDataset(
-                NuclearCataractDataset.TrainValMode(0.8, 0.2),
-                self._cache_size(),
-                self._config.return_paths,
-                hard_policy=self._config.hard_policy,
-            )
+            if not self._config.cas_mode:
+                self.dataset = NuclearCataractDataset(
+                    NuclearCataractDataset.TrainValMode(0.8, 0.2),
+                    self._cache_size(),
+                    self._config.return_paths,
+                    hard_policy=self._config.hard_policy,
+                )
+            else:
+                self.dataset = NuclearCataractDataset(
+                    NuclearCataractDataset.TrainValMode(0, 1.0),
+                    self._cache_size(),
+                    self._config.return_paths,
+                    hard_policy=self._config.hard_policy,
+                )
 
         if not hasattr(self, "test_dataset"):
             self.test_dataset = NuclearCataractDataset(
@@ -152,6 +160,9 @@ class NuclearCataractDataModule(DataModule):
         )
 
     def setup_fold(self, fold: int, num_folds: int) -> None:
+        if self._config.cas_mode:
+            raise RuntimeError("setup_fold not supported in cas mode")
+
         self.dataset = NuclearCataractDataset(
             NuclearCataractDataset.KFoldCVMode(num_folds),
             self._cache_size(),

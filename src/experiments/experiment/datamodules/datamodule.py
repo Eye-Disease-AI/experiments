@@ -14,6 +14,7 @@ class DataModuleConfig(ClassConfig):
     batch_size: int | OptunaOptimised = 64
     augmentor_config: AugmentorConfig | None = None
     n_augment: int | None = None
+    cas_mode: bool = False
 
 
 class DataModule(ABC, L.LightningDataModule):
