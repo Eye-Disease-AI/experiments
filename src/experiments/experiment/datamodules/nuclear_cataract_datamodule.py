@@ -13,6 +13,7 @@ from experiments.experiment.augmentors.augmentor import Augmentor
 from experiments.experiment.augmentors.dataset_utils import (
     AugmentedDataset,
     FakeDataset,
+    simple_stats,
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
 from experiments.lib.config_serializing import OptunaOptimised
@@ -132,6 +133,9 @@ class NuclearCataractDataModule(DataModule):
                 n_classes = self.dataset.n_classes
                 fake_labels = torch.randint(0, n_classes, [self.config.n_augment])
                 fake_images = augmentor.generate(fake_labels)
+                print(
+                    f"Generated fake images shape={fake_images.shape} min={fake_images.min()} max={fake_images.max()} dtype={fake_images.dtype}"
+                )
                 fake_set = FakeDataset(
                     fake_images,
                     fake_labels,
@@ -142,6 +146,7 @@ class NuclearCataractDataModule(DataModule):
                         ]
                     ),
                 )
+                print(simple_stats(fake_set, "FakeDataset stats"))
                 real_set = self.dataset.train_set()
                 train = AugmentedDataset([real_set, fake_set])
             else:
@@ -152,6 +157,7 @@ class NuclearCataractDataModule(DataModule):
             test = self.test_dataset.test_set()
 
             self.train_set = _SubsetTransformer(train, transform=self.transform)
+            print(simple_stats(self.train_set, "_SubsetTransformer stats"))
             self.val_set = _SubsetTransformer(val, transform=self.val_transform)
             self.test_set = _SubsetTransformer(test, transform=self.val_transform)
 

@@ -43,3 +43,24 @@ class AugmentedDataset(ConcatDataset):
         classes_counts_tensor = torch.Tensor(classes_counts)
 
         return all_count / (len(classes_counts) * classes_counts_tensor)
+
+
+def simple_stats(dataset: Dataset, name: str):
+    img_min = 9999
+    img_max = -1
+    img_dtype = None
+    img_shape = None
+
+    for img, _ in dataset:
+        img_min = min(img_min, img.min())
+        img_max = max(img_max, img.max())
+
+        if img_dtype is not None and (img_dtype != img.dtype):
+            raise RuntimeError("images of different dtypes")
+
+        img_dtype = img.dtype
+
+        if img_shape is not None and (img_shape != img.shape):
+            raise RuntimeError("images of different shapes")
+
+    return f"Dataset {name} stats shape={img_shape} min={img_min} max={img_max} dtype={img_dtype}"
