@@ -12,6 +12,7 @@ from torchvision.transforms import v2 as transformsv2
 from experiments.experiment.augmentors.augmentor import Augmentor
 from experiments.experiment.augmentors.dataset_utils import (
     AugmentedDataset,
+    CASDataset,
     FakeDataset,
     simple_stats,
 )
@@ -65,40 +66,40 @@ class NuclearCataractDataModule(DataModule):
         )
         self.train_class_weights = None
         self._batch_size = self._config.batch_size
+        self._setup_transforms()
 
     def _cache_size(self) -> int | None:
         if not self._config.cache:
             return None
         max_rad = math.radians(self._config.augment_rot_angle)
-        return int(
-            math.ceil(self._config.image_size * (math.sin(max_rad) + math.cos(max_rad)))
+        return math.ceil(
+            self._config.image_size * (math.sin(max_rad) + math.cos(max_rad))
         )
 
-    @override
-    def setup(self, stage: str | None = None):
-        if not hasattr(self, "dataset"):
-            if not self._config.cas_mode:
-                self.dataset = NuclearCataractDataset(
-                    NuclearCataractDataset.TrainValMode(0.8, 0.2),
-                    self._cache_size(),
-                    self._config.return_paths,
-                    hard_policy=self._config.hard_policy,
-                )
-            else:
-                self.dataset = NuclearCataractDataset(
-                    NuclearCataractDataset.TrainValMode(0, 1.0),
-                    self._cache_size(),
-                    self._config.return_paths,
-                    hard_policy=self._config.hard_policy,
-                )
-
-        if not hasattr(self, "test_dataset"):
-            self.test_dataset = NuclearCataractDataset(
-                NuclearCataractDataset.TestMode(),
-                self._cache_size(),
-                self._config.return_paths,
-                hard_policy=self._config.hard_policy,
+    def _augment_dataset_if_needed(self, dataset):
+        if self.config.augmentor_config and self.config.n_augment:
+            augmentor: Augmentor = self.config.augmentor_config.build()
+            n_classes = self.dataset.n_classes
+            fake_labels = torch.randint(0, n_classes, [self.config.n_augment])
+            fake_images = augmentor.generate(fake_labels)
+            print(
+                f"Generated fake images shape={fake_images.shape} min={fake_images.min()} max={fake_images.max()} dtype={fake_images.dtype}"
             )
+            # We don't need transforms here, because it will be transformed by the same transforms as the real images
+            fake_set = FakeDataset(
+                fake_images,
+                fake_labels,
+            )
+            print(simple_stats(fake_set, "FakeDataset stats"))
+            augm = AugmentedDataset([dataset, fake_set])
+            print(
+                f"Size of dataset (or subset) after augmentation: orig={len(dataset)} augm={len(augm)}"
+            )
+            return augm
+
+        return dataset
+
+    def _setup_transforms(self):
         train_transforms = [
             transformsv2.Resize(
                 (
@@ -127,27 +128,30 @@ class NuclearCataractDataModule(DataModule):
             )
         self.val_transform = transformsv2.Compose(val_transforms)
 
-        if not hasattr(self, "train_set"):
-            if self.config.augmentor_config and self.config.n_augment:
-                augmentor: Augmentor = self.config.augmentor_config.build()
-                n_classes = self.dataset.n_classes
-                fake_labels = torch.randint(0, n_classes, [self.config.n_augment])
-                fake_images = augmentor.generate(fake_labels)
-                print(
-                    f"Generated fake images shape={fake_images.shape} min={fake_images.min()} max={fake_images.max()} dtype={fake_images.dtype}"
-                )
-                # We don't need transforms here, because it will be transformed by the same transforms as the real images
-                fake_set = FakeDataset(
-                    fake_images,
-                    fake_labels,
-                )
-                print(simple_stats(fake_set, "FakeDataset stats"))
-                real_set = self.dataset.train_set()
-                train = AugmentedDataset([real_set, fake_set])
-            else:
-                train = self.dataset.train_set()
+    @override
+    def setup(self, stage: str | None = None):
+        if not hasattr(self, "dataset"):
+            dataset = NuclearCataractDataset(
+                NuclearCataractDataset.TrainValMode(0.8, 0.2),
+                self._cache_size(),
+                self._config.return_paths,
+                hard_policy=self._config.hard_policy,
+            )
+            self.dataset = CASDataset(dataset) if self._config.cas_mode else dataset
 
-            self.train_class_weights = train.class_weights()
+        if not hasattr(self, "test_dataset"):
+            self.test_dataset = NuclearCataractDataset(
+                NuclearCataractDataset.TestMode(),
+                self._cache_size(),
+                self._config.return_paths,
+                hard_policy=self._config.hard_policy,
+            )
+
+        if not hasattr(self, "train_set"):
+            real_train = self.dataset.train_set()
+            train = self._augment_dataset_if_needed(real_train)
+            weights_from = train if self._config.cas_mode else real_train
+            self.train_class_weights = weights_from.class_weights()
             val = self.dataset.val_set()
             test = self.test_dataset.test_set()
 
@@ -170,9 +174,10 @@ class NuclearCataractDataModule(DataModule):
             self._config.return_paths,
             hard_policy=self._config.hard_policy,
         )
-        train = self.dataset.fold_train_set(fold)
+        real_train = self.dataset.fold_train_set(fold)
+        train = self._augment_dataset_if_needed(real_train)
         val = self.dataset.fold_val_set(fold)
-        self.train_class_weights = train.class_weights()
+        self.train_class_weights = real_train.class_weights()
         self.train_set = _SubsetTransformer(train, transform=self.transform)
         self.val_set = _SubsetTransformer(val, transform=self.val_transform)
 

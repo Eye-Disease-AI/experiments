@@ -43,6 +43,15 @@ def main():
     nc.setup("train")
     draw_grid(nc, "Real")
 
+    nc = NuclearCataractDataModule(
+        NuclearCataractDataModuleConfig(
+            augmentor_config=TacganAugmentorConfig.known_config_tac1(),
+            n_augment=10,
+        )
+    )
+    nc.setup_fold(0, 5)
+    # Logs about subset size should be printed
+
 
 if __name__ == "__main__":
     main()

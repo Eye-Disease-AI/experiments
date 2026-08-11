@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 import torch
+from dataset.loader import NuclearCataractDataset, NuclearCataractSubset
 from torch.utils.data.dataset import ConcatDataset, Dataset
 
 
@@ -43,6 +44,32 @@ class AugmentedDataset(ConcatDataset):
         classes_counts_tensor = torch.Tensor(classes_counts)
 
         return all_count / (len(classes_counts) * classes_counts_tensor)
+
+
+class CASDataset:
+    def __init__(self, dataset: NuclearCataractDataset):
+        self.dataset = dataset
+        self.label_to_idx = dataset.label_to_idx
+        self.n_classes = dataset.n_classes
+
+    def train_set(self) -> NuclearCataractSubset:
+        return self.__subset([])
+
+    def val_set(self) -> NuclearCataractSubset:
+        if not isinstance(self.dataset.mode, NuclearCataractDataset.TrainValMode):
+            raise NotImplementedError
+
+        mapping = self.dataset.mode.split_mapping
+        return self.__subset([s for key in mapping for s in mapping[key]])
+
+    def __subset(self, samples: list) -> NuclearCataractSubset:
+        return NuclearCataractSubset(
+            samples,
+            self.dataset.label_to_idx,
+            self.dataset.return_paths,
+            self.dataset.cache_size is not None,
+            self.dataset.cache_size,
+        )
 
 
 def simple_stats(dataset: Dataset, name: str):

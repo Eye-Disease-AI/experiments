@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import override
 
 import lightning as L
 import torch
@@ -15,6 +16,12 @@ class DataModuleConfig(ClassConfig):
     augmentor_config: AugmentorConfig | None = None
     n_augment: int | None = None
     cas_mode: bool = False
+
+    @override
+    def post_init_checks(self):
+        super().post_init_checks()
+        if self.cas_mode and not (self.augmentor_config and self.n_augment):
+            raise ValueError("cas_mode requires augmentor_config and n_augment")
 
 
 class DataModule(ABC, L.LightningDataModule):
