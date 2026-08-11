@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import override
+from typing import Literal, override
 
 import lightning as L
 import torch
@@ -17,10 +17,17 @@ class DataModuleConfig(ClassConfig):
     n_augment: int | None = None
     cas_mode: bool = False
     augmentor_seed: int = 2137
+    augment_kind: Literal["R", "RA", "RAG"] = "RA"
 
     @override
     def post_init_checks(self):
         super().post_init_checks()
+
+        if self.augment_kind == "RAG" and not (
+            self.augmentor_config and self.n_augment
+        ):
+            raise ValueError("RAG mode requires augmentor to be setup")
+
         if self.cas_mode and not (self.augmentor_config and self.n_augment):
             raise ValueError("cas_mode requires augmentor_config and n_augment")
 

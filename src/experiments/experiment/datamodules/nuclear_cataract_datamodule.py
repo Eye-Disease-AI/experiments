@@ -77,7 +77,11 @@ class NuclearCataractDataModule(DataModule):
         )
 
     def _augment_dataset_if_needed(self, dataset):
-        if self.config.augmentor_config and self.config.n_augment:
+        if (
+            (self.config.augment_kind == "RAG" or self.config.cas_mode)
+            and self.config.augmentor_config
+            and self.config.n_augment
+        ):
             augmentor: Augmentor = self.config.augmentor_config.build()
             n_classes = self.dataset.n_classes
             generator = torch.Generator().manual_seed(self.config.augmentor_seed)
@@ -106,24 +110,6 @@ class NuclearCataractDataModule(DataModule):
         return dataset
 
     def _setup_transforms(self):
-        train_transforms = [
-            transformsv2.Resize(
-                (
-                    int(np.ceil(self._config.image_size * 1.5)),
-                    int(np.ceil(self._config.image_size * 1.5)),
-                )
-            ),
-            transformsv2.RandomHorizontalFlip(0.5),
-            transformsv2.RandomRotation(self._config.augment_rot_angle),
-            transformsv2.Resize((self._config.image_size, self._config.image_size)),
-            transformsv2.ConvertImageDtype(),
-        ]
-        if self._config.normalize:
-            train_transforms.append(
-                transformsv2.Normalize(mean=self.DATASET_MEAN, std=self.DATASET_STD)
-            )
-        self.transform = transformsv2.Compose(train_transforms)
-
         val_transforms = [
             transformsv2.Resize((self._config.image_size, self._config.image_size)),
             transformsv2.ConvertImageDtype(),
@@ -133,6 +119,30 @@ class NuclearCataractDataModule(DataModule):
                 transformsv2.Normalize(mean=self.DATASET_MEAN, std=self.DATASET_STD)
             )
         self.val_transform = transformsv2.Compose(val_transforms)
+
+        if self.config.augment_kind in ["RA", "RAG"]:
+            train_transforms = [
+                transformsv2.Resize(
+                    (
+                        int(np.ceil(self._config.image_size * 1.5)),
+                        int(np.ceil(self._config.image_size * 1.5)),
+                    )
+                ),
+                transformsv2.RandomHorizontalFlip(0.5),
+                transformsv2.RandomRotation(self._config.augment_rot_angle),
+                transformsv2.Resize((self._config.image_size, self._config.image_size)),
+                transformsv2.ConvertImageDtype(),
+            ]
+            if self._config.normalize:
+                train_transforms.append(
+                    transformsv2.Normalize(mean=self.DATASET_MEAN, std=self.DATASET_STD)
+                )
+        # This is "R" case here
+        else:
+            # Copy the list
+            train_transforms = list(val_transforms)
+
+        self.transform = transformsv2.Compose(train_transforms)
 
     @override
     def setup(self, stage: str | None = None):
