@@ -12,8 +12,8 @@ class AugmentorConfig(ClassConfig): ...
 
 class Augmentor(ABC):
     @abstractmethod
-    def generate(self, labels: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+    def generate(self, seeds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        assert len(seeds) == len(labels)
 
 
 #    @abstractmethod

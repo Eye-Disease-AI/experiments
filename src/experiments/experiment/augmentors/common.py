@@ -91,8 +91,12 @@ def find_run(
 
 
 def sample_augmentor(augmentor: Augmentor, save_path_prefix: str):
-    gens = augmentor.generate(torch.Tensor([0, 1]).to(dtype=torch.long))
+    seeds = [3, 4]
+    classes = [0, 1]
+    gens = augmentor.generate(
+        torch.Tensor(seeds), torch.Tensor(classes).to(dtype=torch.long)
+    )
     for i, gen in enumerate(gens):
         gen_perm = gen.permute(1, 2, 0)
         plt.imshow(gen_perm)
-        plt.savefig(f"{save_path_prefix}_class{i}.png")
+        plt.savefig(f"{save_path_prefix}_seed_{seeds[i]}_class{classes[i]}.png")

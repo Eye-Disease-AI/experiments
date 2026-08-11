@@ -271,7 +271,8 @@ class StyleganAugmentor(Augmentor):
             f"{out_dir}",
         ]
 
-    def generate(self, labels: torch.Tensor) -> torch.Tensor:
+    def generate(self, seeds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        super().generate(seeds, labels)
         # Activate experiment
         exp = Experiment(self.EXPERIMENT_NAME)
         query_params = self.config.query_params()
@@ -299,13 +300,14 @@ class StyleganAugmentor(Augmentor):
             generations_dir = Path(tmp_dir) / "generations"
             generations_dir.mkdir()
 
+            seeds_list = [int(seed) for seed in seeds.tolist()]
             labels_seeds: dict[int, list[int]] = {}
 
-            for i, label in enumerate(labels.tolist()):
+            for seed, label in zip(seeds_list, labels.tolist()):
                 if label in labels_seeds:
-                    labels_seeds[label].append(i)
+                    labels_seeds[label].append(seed)
                 else:
-                    labels_seeds[label] = [i]
+                    labels_seeds[label] = [seed]
 
             for label, seeds in labels_seeds.items():
                 cmd_line = self.generate_cmdline(
@@ -317,8 +319,8 @@ class StyleganAugmentor(Augmentor):
                 subprocess.run(cmd_line, check=True)
 
             generations_paths = []
-            for i in range(len(labels)):
-                generations_paths.append(generations_dir / f"seed{i:04d}.png")
+            for seed in seeds_list:
+                generations_paths.append(generations_dir / f"seed{seed:04d}.png")
 
             generated_images = []
             for path in generations_paths:

@@ -266,7 +266,8 @@ class TacganAugmentor(Augmentor):
             "--sample_gen",
         ]
 
-    def generate(self, labels: torch.Tensor) -> torch.Tensor:
+    def generate(self, seeds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        super().generate(seeds, labels)
         exp = Experiment(self.EXPERIMENT_NAME)
         query_params = self.config.query_params()
         run: mlflow.entities.Run = find_run(query_params, exp)
@@ -303,7 +304,7 @@ class TacganAugmentor(Augmentor):
                 print(path)
 
             classes = [int(label) for label in labels.tolist()]
-            seeds = list(range(len(classes)))
+            seeds = [int(seed) for seed in seeds.tolist()]
             samples_root = Path(tmp_dir) / "samples"
             samples_root.mkdir()
             cmd_line = self.generate_cmdline(

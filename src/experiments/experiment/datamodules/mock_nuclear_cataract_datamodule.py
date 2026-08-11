@@ -83,7 +83,8 @@ class MockNuclearCataractDataModule(DataModule):
                     self._config.augmentor_config.build()
                 )
                 fake_labels = torch.zeros((self._config.n_augment), dtype=torch.long)
-                fake_images = augmentor.generate(fake_labels)
+                fake_seeds = torch.arange(self._config.n_augment)
+                fake_images = augmentor.generate(fake_seeds, fake_labels)
                 fake_set = FakeDataset(
                     fake_images,
                     fake_labels,

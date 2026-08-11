@@ -43,7 +43,11 @@ class GeneratedDataModule(DataModule):
         assert self._config.augmentor_config is not None
         augmentor: Augmentor = self._config.augmentor_config.build()
         labels = torch.arange(self._config.n_samples) % self._config.n_classes
-        self.dataset = TensorDataset(augmentor.generate(labels), labels)
+        generator = torch.Generator().manual_seed(self._config.augmentor_seed)
+        seeds = torch.randint(0, 2**31, [1], generator=generator) + torch.arange(
+            self._config.n_samples
+        )
+        self.dataset = TensorDataset(augmentor.generate(seeds, labels), labels)
 
     def _dataloader(self):
         return DataLoader(self.dataset, batch_size=self._batch_size)

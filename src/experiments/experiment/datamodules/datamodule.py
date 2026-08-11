@@ -16,6 +16,7 @@ class DataModuleConfig(ClassConfig):
     augmentor_config: AugmentorConfig | None = None
     n_augment: int | None = None
     cas_mode: bool = False
+    augmentor_seed: int = 2137
 
     @override
     def post_init_checks(self):

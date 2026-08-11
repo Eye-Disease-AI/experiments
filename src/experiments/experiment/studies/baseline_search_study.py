@@ -68,9 +68,9 @@ class BaselineSearchStudy(Study, KFoldValidatable):
 
     @override
     def _init_datamodules(self) -> list[DataModule]:
-        self._datamodule: NuclearCataractDataModule = (
-            self._config.datamodule_config.build()
-        )
+        self._datamodule: NuclearCataractDataModule = replace(
+            self._config.datamodule_config, augmentor_seed=self._config.seed
+        ).build()
         return [self._datamodule]
 
     @override

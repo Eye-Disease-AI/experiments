@@ -80,8 +80,14 @@ class NuclearCataractDataModule(DataModule):
         if self.config.augmentor_config and self.config.n_augment:
             augmentor: Augmentor = self.config.augmentor_config.build()
             n_classes = self.dataset.n_classes
-            fake_labels = torch.randint(0, n_classes, [self.config.n_augment])
-            fake_images = augmentor.generate(fake_labels)
+            generator = torch.Generator().manual_seed(self.config.augmentor_seed)
+            fake_seeds = torch.randint(
+                0, 2**31, [1], generator=generator
+            ) + torch.arange(self.config.n_augment)
+            fake_labels = torch.randint(
+                0, n_classes, [self.config.n_augment], generator=generator
+            )
+            fake_images = augmentor.generate(fake_seeds, fake_labels)
             print(
                 f"Generated fake images shape={fake_images.shape} min={fake_images.min()} max={fake_images.max()} dtype={fake_images.dtype}"
             )

@@ -24,7 +24,8 @@ class MockNuclearCataractAugmentor(Augmentor):
         self.config = config
 
     @override
-    def generate(self, labels: torch.Tensor) -> torch.Tensor:
+    def generate(self, seeds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        super().generate(seeds, labels)
         num_images = labels.shape[0]
         assert num_images != 0
         generated_images = []
