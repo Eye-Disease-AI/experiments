@@ -136,15 +136,10 @@ class NuclearCataractDataModule(DataModule):
                 print(
                     f"Generated fake images shape={fake_images.shape} min={fake_images.min()} max={fake_images.max()} dtype={fake_images.dtype}"
                 )
+                # We don't need transforms here, because it will be transformed by the same transforms as the real images
                 fake_set = FakeDataset(
                     fake_images,
                     fake_labels,
-                    transformsv2.Compose(
-                        [
-                            transformsv2.Resize(self._config.image_size),
-                            transformsv2.ToDtype(torch.float32),
-                        ]
-                    ),
                 )
                 print(simple_stats(fake_set, "FakeDataset stats"))
                 real_set = self.dataset.train_set()
