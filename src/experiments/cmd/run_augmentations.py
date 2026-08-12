@@ -65,7 +65,7 @@ def main():
     args = parse_args()
     if args.num_seeds <= 0:
         raise ValueError("--num-seeds must be greater than zero")
-    if args.n_augment <= 0:
+    if args.condition in ["all", "RAG"] and args.n_augment <= 0:
         raise ValueError("--n-augment must be greater than zero")
     run_experiments(args.condition, args.num_seeds, args.n_augment)
 
