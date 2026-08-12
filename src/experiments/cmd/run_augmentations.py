@@ -8,7 +8,7 @@ from experiments.experiment.studies.baseline_study import BaselineStudyConfig
 CONDITIONS: dict[str, tuple[str, str | None]] = {
     "R": ("R", None),
     "RA": ("RA", None),
-    "TACGAN": ("RAG", "tacgan-tac2"),
+    "TACGAN": ("RAG", "tacgan-tac3"),
 }
 
 

@@ -74,6 +74,17 @@ class TacganAugmentorConfig(AugmentorConfig):
             resolution=256,
         )
 
+    @staticmethod
+    def known_config_tac3() -> TacganAugmentorConfig:
+        return TacganAugmentorConfig(
+            loss_type="Twin_AC",
+            ac_weight=2.0,
+            batch_size=16,
+            dataset="NuclearCataractDominate",
+            seed=2018,
+            resolution=256,
+        )
+
     def query_params(self) -> list[tuple[str, str]]:
         return [
             ("loss_type", self.loss_type),

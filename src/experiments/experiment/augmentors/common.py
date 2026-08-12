@@ -26,6 +26,8 @@ def create_augmentor(config: str) -> AugmentorConfig:
         return TacganAugmentorConfig.known_config_tac1()
     if config == "tacgan-tac2":
         return TacganAugmentorConfig.known_config_tac2()
+    if config == "tacgan-tac3":
+        return TacganAugmentorConfig.known_config_tac3()
     raise RuntimeError("unknown config")
 
 
