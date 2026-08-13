@@ -98,6 +98,19 @@ def run_experiments(config: str):
             )
         )
 
+    if config in ["tac3", "all"]:
+        experiments.append(
+            replace(
+                baseline_study_config,
+                study_suffix="tac3",
+                datamodule_config=replace(
+                    baseline_study_config.datamodule_config,
+                    augmentor_config=TacganAugmentorConfig.known_config_tac3(),
+                    n_augment=1000,
+                ),
+            )
+        )
+
     for exp_config in experiments:
         augmented_study = exp_config.build()
         print(f"Running tacgan study (config {exp_config.study_suffix})...")
