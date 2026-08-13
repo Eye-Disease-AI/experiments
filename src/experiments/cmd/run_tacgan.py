@@ -25,6 +25,11 @@ def upload(config: str):
             "AC_AC_weight1.0_BigGAN_NuclearCataract_seed2018_Gch64_Dch64_bs2_nDs2_Glr2.0e-04_Dlr2.0e-04_Gnlrelu_Dnlrelu_GinitN02_DinitN02_ema",
         )
 
+    if config in ["tac3", "all"]:
+        TacganAugmentor.upload_results_to_mlflow(
+            "Twin_AC_AC_weight2.0_BigGAN_NuclearCataractDominate_seed2018_Gch64_Dch64_bs16_nDs2_Glr2.0e-04_Dlr2.0e-04_Gnlrelu_Dnlrelu_GinitN02_DinitN02_ema",
+        )
+
 
 def create_augmentor(config: str):
     if config == "ac":
@@ -33,6 +38,8 @@ def create_augmentor(config: str):
         return TacganAugmentorConfig.known_config_tac1().build()
     elif config == "tac2":
         return TacganAugmentorConfig.known_config_tac2().build()
+    elif config == "tac3":
+        return TacganAugmentorConfig.known_config_tac3().build()
     else:
         raise RuntimeError("unknown config")
 
@@ -115,7 +122,10 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--upload", action="store_true", default=False)
     parser.add_argument(
-        "--config", type=str, choices=["ac", "tac1", "tac2", "all"], required=True
+        "--config",
+        type=str,
+        choices=["ac", "tac1", "tac2", "tac3", "all"],
+        required=True,
     )
     parser.add_argument("--sample", action="store_true", default=False)
     parser.add_argument("--experiments", action="store_true")
