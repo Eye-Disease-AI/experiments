@@ -275,6 +275,7 @@ class TacganAugmentor(Augmentor):
             "--sample_seeds",
             *seeds_str,
             "--sample_gen",
+            "--G_eval_mode",
         ]
 
     def generate(self, seeds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
