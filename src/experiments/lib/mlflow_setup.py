@@ -9,9 +9,10 @@ from optuna.storages import RDBStorage
 
 
 class Experiment:
-    def __init__(self, experiment_name: str | None = None):
+    def __init__(self, experiment_name: str | None = None, set_active: bool = True):
         self.experiment_name = experiment_name
         self.study: optuna.study.Study | None = None
+        self.set_active: bool = set_active
 
         load_dotenv()
         self.init_server_data()
@@ -46,7 +47,15 @@ class Experiment:
         mlflow.set_tracking_uri(self.MLFLOW_URI)
 
         if self.experiment_name:
-            self.mlflow_experiment = mlflow.set_experiment(self.experiment_name)
+            if self.set_active:
+                self.mlflow_experiment = mlflow.set_experiment(self.experiment_name)
+            else:
+                self.mlflow_experiment = mlflow.get_experiment_by_name(
+                    self.experiment_name
+                )
+                assert self.mlflow_experiment is not None, (
+                    "Experiment not found but set_active is disabled"
+                )
 
         self.client = mlflow.MlflowClient()
         self.storage = RDBStorage(url=self.OPTUNA_DB_URL)

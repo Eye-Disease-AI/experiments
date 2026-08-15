@@ -280,7 +280,7 @@ class TacganAugmentor(Augmentor):
 
     def generate(self, seeds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         super().generate(seeds, labels)
-        exp = Experiment(self.EXPERIMENT_NAME)
+        exp = Experiment(self.EXPERIMENT_NAME, set_active=False)
         query_params = self.config.query_params()
         run: mlflow.entities.Run = find_run(query_params, exp)
         print(f"Found run with matching parameters: {run.info.run_name}")
