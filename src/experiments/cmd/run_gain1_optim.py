@@ -1,3 +1,6 @@
+# Gain optimisation
+# Find optimal hiperparams for default GAIN AM+ES
+
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
@@ -34,6 +37,7 @@ studies = [
             omega_mask=OptunaOptimised("float", {"low": 1, "high": 200, "log": False}),
         ),
         max_trials=100,
+        optuna_metric="val_map_50",
     ),
 ]
 

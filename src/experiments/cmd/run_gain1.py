@@ -1,3 +1,7 @@
+# Gain ablation
+# Test how using different GAIN components affects the results.
+# Keeping the default hyperparameter values
+
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
