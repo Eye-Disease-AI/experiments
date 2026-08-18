@@ -1,6 +1,8 @@
 # Gain optimisation
 # Find optimal hiperparams for default GAIN AM+ES
 
+from typing import Literal
+
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
@@ -18,11 +20,10 @@ def dmc():
     )
 
 
-exp_name = "gain1_optim"
-studies = [
-    BaselineStudyConfig(
+def make_study(metric: Literal["val_map_50", "val_auroc", "val_miou"]):
+    return BaselineStudyConfig(
         experiment_name=exp_name,
-        study_suffix="baseline",
+        study_suffix="optim_map",
         datamodule_config=dmc(),
         model_config=GAINConvNextConfig(
             use_attention_mining=True,
@@ -37,8 +38,15 @@ studies = [
             omega_mask=OptunaOptimised("float", {"low": 1, "high": 200, "log": False}),
         ),
         max_trials=100,
-        optuna_metric="val_map_50",
-    ),
+        optuna_metric=metric,
+    )
+
+
+exp_name = "gain1_optim"
+studies = [
+    make_study("val_map_50"),
+    make_study("val_auroc"),
+    make_study("val_miou"),
 ]
 
 
