@@ -2,14 +2,12 @@ from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
 from experiments.experiment.models.gain_convnext import GAINConvNextConfig
-from experiments.experiment.studies.baseline_study import (
-    BaselineStudyConfig,
-)
+from experiments.experiment.studies.gain_optimised import GainOptimisedStudyConfig
 
 
 def dmc():
     return NuclearCataractDataModuleConfig.from_other(
-        BaselineStudyConfig().datamodule_config,
+        GainOptimisedStudyConfig().datamodule_config,
         return_bboxes=True,
     )
 
@@ -43,12 +41,12 @@ def generate_studies():
     for combo in combos:
         layers, name = combo
         studies.append(
-            BaselineStudyConfig(
+            GainOptimisedStudyConfig(
                 experiment_name=exp_name,
                 study_suffix=name,
                 datamodule_config=dmc(),
                 model_config=GAINConvNextConfig.from_other(
-                    BaselineStudyConfig().model_config,
+                    GainOptimisedStudyConfig().model_config,
                     use_attention_mining=True,
                     use_external_supervision=True,
                     target_layers=layers,
