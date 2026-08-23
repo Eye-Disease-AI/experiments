@@ -24,7 +24,7 @@ class BaselineStudyConfig(BaselineSearchStudyConfig):
     @override
     @staticmethod
     def get_configured_class():
-        return BaselineSearchStudy
+        return BaselineStudy
 
 
 class BaselineStudy(BaselineSearchStudy, KFoldValidatable):
