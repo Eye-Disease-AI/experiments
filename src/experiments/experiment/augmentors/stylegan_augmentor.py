@@ -152,24 +152,35 @@ class StyleganAugmentor(Augmentor):
                         for line_json in metric_file:
                             line = json.loads(line_json)
                             metric_name = line["metric"]
-                            metric_value = line["results"][metric_name]
-                            snapshot_pkl = line["snapshot_pkl"]
+                            possible_metrics = [
+                                metric_name,
+                                metric_name + "_mean",
+                                metric_name + "_std",
+                            ]
 
-                            if metric_name == "fid20k_full" and (
-                                metric_value < best_fid20k or not found_fid20k
-                            ):
-                                found_fid20k = True
-                                best_snapshot = snapshot_pkl
-                                best_fid20k = metric_value
+                            for metric_name in possible_metrics:
+                                if metric_name not in line["results"]:
+                                    continue
 
-                            metrics.append(
-                                Metric(
-                                    key=metric_name,
-                                    value=metric_value,
-                                    timestamp=int(line["timestamp"]),
-                                    step=cur_step,
+                                metric_value = line["results"][metric_name]
+                                snapshot_pkl = line["snapshot_pkl"]
+
+                                if metric_name == "fid20k_full" and (
+                                    metric_value < best_fid20k or not found_fid20k
+                                ):
+                                    found_fid20k = True
+                                    best_snapshot = snapshot_pkl
+                                    best_fid20k = metric_value
+
+                                metrics.append(
+                                    Metric(
+                                        key=metric_name,
+                                        value=metric_value,
+                                        timestamp=int(line["timestamp"]),
+                                        step=cur_step,
+                                    )
                                 )
-                            )
+
                             cur_step += validation_interval_steps
 
             print("Logging best snapshot")
