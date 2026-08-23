@@ -92,8 +92,6 @@ class StyleganAugmentorConfig(AugmentorConfig):
             ("loss_kwargs.r1_gamma", f"{self.gamma:.1f}"),
             # I think that image_snapshot_ticks and network_snapshot_ticks are the same value
             ("image_snapshot_ticks", str(self.snap)),
-            # I don't know if it will work for multiple metrics:
-            ("metrics", f"['{self.metrics}']"),
             ("training_set_kwargs.use_labels", "True" if self.cond else "False"),
             ("G_kwargs.use_radial_filters", "True" if use_radial_filters else "False"),
             ("training_set_kwargs.resolution", str(self.resolution)),
