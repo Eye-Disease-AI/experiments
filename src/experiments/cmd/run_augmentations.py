@@ -9,6 +9,8 @@ CONDITIONS: dict[str, tuple[str, str | None]] = {
     "R": ("R", None),
     "RA": ("RA", None),
     "TACGAN": ("RAG", "tacgan-tac3"),
+    "STYLEGAN_T": ("RAG", "stylegan-t"),
+    "STYLEGAN_R": ("RAG", "stylegan-r"),
 }
 
 
