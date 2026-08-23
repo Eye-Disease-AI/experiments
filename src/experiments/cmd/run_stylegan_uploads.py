@@ -22,7 +22,7 @@ if __name__ == "__main__":
         print("Uploading stylegan t")
         StyleganAugmentor.upload_results_to_mlflow(
             Path(
-                "/home/maciek/Desktop/masters/experiments3/packages/stylegan3/training-runs/00030-stylegan3-r-ncsg3-gpus1-batch12-gamma2"
+                "/home/maciek/Desktop/masters/experiments3/packages/stylegan3/training-runs/00031-stylegan3-r-ncsg3-gpus1-batch12-gamma2"
             )
         )
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
         print("Uploading stylegan r")
         StyleganAugmentor.upload_results_to_mlflow(
             Path(
-                "/home/maciek/Desktop/masters/experiments3/packages/stylegan3/training-runs/00029-stylegan3-t-ncsg3-gpus1-batch12-gamma2"
+                "/home/maciek/Desktop/masters/experiments3/packages/stylegan3/training-runs/00032-stylegan3-t-ncsg3-gpus1-batch12-gamma2"
             )
         )
 
