@@ -1,6 +1,7 @@
 import argparse
 from typing import Literal
 
+from experiments.cmd.run_augmentations import CONDITIONS
 from experiments.experiment.augmentors.common import create_augmentor
 from experiments.experiment.datamodules.datamodule import DataModuleConfig
 from experiments.experiment.datamodules.generated_datamodule import (
@@ -11,13 +12,11 @@ from experiments.experiment.studies.lpips_study import (
     LPIPSStudyConfig,
 )
 
-CONFIGS = [
-    "stylegan-r",
-    "stylegan-t",
-    "tacgan-ac",
-    "tacgan-tac1",
-    "tacgan-tac2",
-]
+CONFIGS: dict[str, str] = {
+    condition: augmentor
+    for condition, (_, augmentor) in CONDITIONS.items()
+    if augmentor is not None
+}
 
 
 def run_study(
@@ -41,35 +40,49 @@ def run_study(
     print(f"lpips={study.best_value:.4f}")
 
 
-def run_experiments(config: str, n_samples: int, batch_size: int):
-    configs = CONFIGS if config == "all" else [config]
-    for current in configs:
+def run_experiments(condition: str, n_samples: int, batch_size: int):
+    if condition == "all":
+        conditions = list(CONFIGS)
+    else:
+        conditions = [condition]
+
+    for c in conditions:
+        if c == "real":
+            continue
+
         fake = GeneratedDataModuleConfig(
-            augmentor_config=create_augmentor(current),
+            augmentor_config=create_augmentor(CONFIGS[c]),
             n_samples=n_samples,
         )
-        run_study(f"{current}-fake-fake", fake, fake, "max", n_samples, batch_size)
+        run_study(f"{c}-fake-fake", fake, fake, "max", n_samples, batch_size)
         run_study(
-            f"{current}-fake-real",
+            f"{c}-fake-real",
             fake,
             REAL_DATAMODULE_CONFIG,
             "min",
             n_samples,
             batch_size,
         )
-    run_study(
-        "real-real",
-        REAL_DATAMODULE_CONFIG,
-        REAL_DATAMODULE_CONFIG,
-        "max",
-        n_samples,
-        batch_size,
-    )
+
+    if "real" in conditions:
+        run_study(
+            "real-real",
+            REAL_DATAMODULE_CONFIG,
+            REAL_DATAMODULE_CONFIG,
+            "max",
+            n_samples,
+            batch_size,
+        )
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", choices=[*CONFIGS, "all"], required=True)
+    parser.add_argument(
+        "--condition",
+        type=str,
+        choices=[*CONFIGS, "all", "real"],
+        default="all",
+    )
     parser.add_argument(
         "--n-samples",
         type=int,
@@ -87,7 +100,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    run_experiments(args.config, args.n_samples, args.batch_size)
+    run_experiments(args.condition, args.n_samples, args.batch_size)
 
 
 if __name__ == "__main__":
