@@ -27,7 +27,6 @@ class LPIPSModule(L.LightningModule):
         self.lpips = LearnedPerceptualImagePatchSimilarity(
             net_type=config.net_type, reduction="none", normalize=True
         )
-        self.mean = MeanMetric()
         self.class_means = torch.nn.ModuleList(
             [MeanMetric() for _ in range(config.n_classes)]
         )
@@ -35,7 +34,6 @@ class LPIPSModule(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         first, second, labels = batch
         distances = self.lpips(first, second).reshape(-1)
-        self.mean.update(distances)
         for class_index, metric in enumerate(self.class_means):
             assert isinstance(metric, MeanMetric)
             mask = labels == class_index
@@ -43,13 +41,12 @@ class LPIPSModule(L.LightningModule):
                 metric.update(distances[mask])
 
     def on_validation_epoch_end(self):
-        metrics = {"lpips": self.mean.compute()}
+        metrics = {"lpips": self.lpips.compute().mean()}
         for class_index, metric in enumerate(self.class_means):
             assert isinstance(metric, MeanMetric)
             metrics[f"lpips_class_{class_index}"] = metric.compute()
         self.log_dict(metrics, prog_bar=True)
         self.lpips.reset()
-        self.mean.reset()
         for metric in self.class_means:
             assert isinstance(metric, MeanMetric)
             metric.reset()
