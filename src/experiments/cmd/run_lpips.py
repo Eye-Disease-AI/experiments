@@ -7,6 +7,7 @@ from experiments.experiment.datamodules.datamodule import DataModuleConfig
 from experiments.experiment.datamodules.generated_datamodule import (
     GeneratedDataModuleConfig,
 )
+from experiments.experiment.datamodules.lpips_datamodule import LPIPSDataModuleConfig
 from experiments.experiment.studies.lpips_study import (
     REAL_DATAMODULE_CONFIG,
     LPIPSStudyConfig,
@@ -29,10 +30,12 @@ def run_study(
 ):
     config = LPIPSStudyConfig(
         study_suffix=name,
-        first_datamodule_config=first,
-        second_datamodule_config=second,
-        n_samples=n_samples,
-        batch_size=batch_size,
+        datamodule_config=LPIPSDataModuleConfig(
+            first_config=first,
+            second_config=second,
+            n_samples=n_samples,
+            batch_size=batch_size,
+        ),
         optuna_direction=direction,
     )
     print(f"Running LPIPS study ({name})...")
