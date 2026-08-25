@@ -26,12 +26,14 @@ def run_study(
     second: DataModuleConfig,
     direction: Literal["min", "max"],
     batch_size: int,
+    equal_datamodules: bool = False,
 ):
     config = LPIPSStudyConfig(
         study_suffix=name,
         datamodule_config=LPIPSDataModuleConfig(
             first_config=first,
             second_config=second,
+            equal_datamodules=equal_datamodules,
             batch_size=batch_size,
         ),
         optuna_direction=direction,
@@ -55,7 +57,7 @@ def run_experiments(condition: str, n_samples: int, batch_size: int):
             augmentor_config=create_augmentor(CONFIGS[c]),
             n_samples=n_samples,
         )
-        run_study(f"{c}-fake-fake", fake, fake, "max", batch_size)
+        run_study(f"{c}-fake-fake", fake, fake, "max", batch_size, True)
         run_study(f"{c}-fake-real", fake, REAL_DATAMODULE_CONFIG, "min", batch_size)
 
     if "real" in conditions:
@@ -65,6 +67,7 @@ def run_experiments(condition: str, n_samples: int, batch_size: int):
             REAL_DATAMODULE_CONFIG,
             "max",
             batch_size,
+            True,
         )
 
 

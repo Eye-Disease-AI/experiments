@@ -12,6 +12,7 @@ from experiments.experiment.datamodules.datamodule import DataModule, DataModule
 class LPIPSDataModuleConfig(DataModuleConfig):
     first_config: DataModuleConfig
     second_config: DataModuleConfig
+    equal_datamodules: bool = False
     batch_size: int = 16
     image_size: int = 224
 
@@ -59,7 +60,10 @@ class LPIPSDataModule(DataModule):
             )
 
         self.dataset = _PairDataset(
-            first_by_class, second_by_class, self._config.image_size
+            first_by_class,
+            second_by_class,
+            self._config.image_size,
+            self._config.equal_datamodules,
         )
 
     @staticmethod
@@ -116,6 +120,7 @@ class _PairDataset(Dataset):
         first_by_class: list[list[torch.Tensor]],
         second_by_class: list[list[torch.Tensor]],
         image_size: int,
+        equal_datamodules: bool,
     ):
         self._first = first_by_class
         self._second = second_by_class
@@ -134,9 +139,12 @@ class _PairDataset(Dataset):
             pairs = torch.cartesian_prod(
                 torch.arange(len(first)), torch.arange(len(second))
             )
+            if equal_datamodules:
+                pairs = pairs[pairs[:, 0] != pairs[:, 1]]
             labels = torch.full((len(pairs), 1), label)
             index.append(torch.cat([labels, pairs], dim=1))
         self._index = torch.cat(index)
+        assert len(self._index) > 0, "No image pairs to compare"
 
     def __len__(self):
         return len(self._index)
