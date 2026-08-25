@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from random import choice
 from typing import override
 
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import v2 as transforms
 
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
@@ -13,15 +12,12 @@ from experiments.experiment.datamodules.datamodule import DataModule, DataModule
 class LPIPSDataModuleConfig(DataModuleConfig):
     first_config: DataModuleConfig
     second_config: DataModuleConfig
-    n_samples: int = 1000
     batch_size: int = 16
     image_size: int = 224
 
     @override
     def post_init_checks(self):
         super().post_init_checks()
-        if self.n_samples <= 0:
-            raise ValueError("LPIPS requires n_samples > 0")
         if self.batch_size <= 0:
             raise ValueError("LPIPS requires batch_size > 0")
 
@@ -62,22 +58,8 @@ class LPIPSDataModule(DataModule):
                 f"No images in second dataset class {class_index}"
             )
 
-        labels = torch.arange(self._config.n_samples) % self.n_classes
-        pairs = [
-            (choice(first_by_class[label]), choice(second_by_class[label]))
-            for label in labels.tolist()
-        ]
-        first, second = zip(*pairs, strict=True)
-        transform = transforms.Compose(
-            [
-                transforms.ToDtype(torch.float32, scale=True),
-                transforms.Resize((self._config.image_size, self._config.image_size)),
-            ]
-        )
-        self.dataset = TensorDataset(
-            transform(torch.stack(first)).clamp(0, 1),
-            transform(torch.stack(second)).clamp(0, 1),
-            labels,
+        self.dataset = _PairDataset(
+            first_by_class, second_by_class, self._config.image_size
         )
 
     @staticmethod
@@ -126,3 +108,43 @@ class LPIPSDataModule(DataModule):
     @override
     def batch_size(self, value: int):
         self._batch_size = value
+
+
+class _PairDataset(Dataset):
+    def __init__(
+        self,
+        first_by_class: list[list[torch.Tensor]],
+        second_by_class: list[list[torch.Tensor]],
+        image_size: int,
+    ):
+        self._first = first_by_class
+        self._second = second_by_class
+
+        self._transform = transforms.Compose(
+            [
+                transforms.ToDtype(torch.float32, scale=True),
+                transforms.Resize((image_size, image_size)),
+            ]
+        )
+
+        index = []
+        for label, (first, second) in enumerate(
+            zip(first_by_class, second_by_class, strict=True)
+        ):
+            pairs = torch.cartesian_prod(
+                torch.arange(len(first)), torch.arange(len(second))
+            )
+            labels = torch.full((len(pairs), 1), label)
+            index.append(torch.cat([labels, pairs], dim=1))
+        self._index = torch.cat(index)
+
+    def __len__(self):
+        return len(self._index)
+
+    def __getitem__(self, idx: int):
+        label, first, second = self._index[idx].tolist()
+        return (
+            self._transform(self._first[label][first]).clamp(0, 1),
+            self._transform(self._second[label][second]).clamp(0, 1),
+            label,
+        )

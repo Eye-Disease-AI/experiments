@@ -25,7 +25,6 @@ def run_study(
     first: DataModuleConfig,
     second: DataModuleConfig,
     direction: Literal["min", "max"],
-    n_samples: int,
     batch_size: int,
 ):
     config = LPIPSStudyConfig(
@@ -33,7 +32,6 @@ def run_study(
         datamodule_config=LPIPSDataModuleConfig(
             first_config=first,
             second_config=second,
-            n_samples=n_samples,
             batch_size=batch_size,
         ),
         optuna_direction=direction,
@@ -57,15 +55,8 @@ def run_experiments(condition: str, n_samples: int, batch_size: int):
             augmentor_config=create_augmentor(CONFIGS[c]),
             n_samples=n_samples,
         )
-        run_study(f"{c}-fake-fake", fake, fake, "max", n_samples, batch_size)
-        run_study(
-            f"{c}-fake-real",
-            fake,
-            REAL_DATAMODULE_CONFIG,
-            "min",
-            n_samples,
-            batch_size,
-        )
+        run_study(f"{c}-fake-fake", fake, fake, "max", batch_size)
+        run_study(f"{c}-fake-real", fake, REAL_DATAMODULE_CONFIG, "min", batch_size)
 
     if "real" in conditions:
         run_study(
@@ -73,7 +64,6 @@ def run_experiments(condition: str, n_samples: int, batch_size: int):
             REAL_DATAMODULE_CONFIG,
             REAL_DATAMODULE_CONFIG,
             "max",
-            n_samples,
             batch_size,
         )
 
@@ -90,7 +80,7 @@ def parse_args():
         "--n-samples",
         type=int,
         default=1000,
-        help="Number of generated image pairs",
+        help="Number of generated images (all same-class pairs of them are compared)",
     )
     parser.add_argument(
         "--batch-size",
