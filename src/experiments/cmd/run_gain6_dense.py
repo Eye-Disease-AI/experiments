@@ -43,10 +43,10 @@ studies = generate_studies()
 
 def main():
     for study in studies:
-        print(study.study_suffix)
+        # print(study.study_suffix)
 
-        # study = study.build()
-        # study.run()
+        study = study.build()
+        study.run()
 
 
 if __name__ == "__main__":
