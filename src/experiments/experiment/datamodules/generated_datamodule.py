@@ -48,6 +48,7 @@ class GeneratedDataModule(DataModule):
             self._config.n_samples
         )
         self.dataset = TensorDataset(augmentor.generate(seeds, labels), labels)
+        del augmentor
 
     def _dataloader(self):
         return DataLoader(self.dataset, batch_size=self._batch_size)
