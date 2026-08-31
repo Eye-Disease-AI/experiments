@@ -59,9 +59,60 @@ def compute_gradcam(
     )  # L x [B, K, H, W]
     maps = []
     for feats, grad in zip(features, grads):
+        # channel wise weight obtained by averaging the gradients in A
         weights = grad.mean(dim=(2, 3))
         # Attention map A^c
         A = F.relu((weights[:, :, None, None] * feats).sum(dim=1))
+        maps.append(A)
+    return maps
+
+
+def compute_gradcam_pp(
+    features: list[torch.Tensor],  # L x [B, K, H, W]
+    logits: torch.Tensor,  # [B, n_classes]
+    target_classes: torch.Tensor,  # [B]
+) -> list[torch.Tensor]:  # L x [B, H, W]
+    s_c = logits.gather(1, target_classes.unsqueeze(1)).squeeze(1)  # [B]
+    score = s_c.sum()
+
+    grads = torch.autograd.grad(
+        outputs=score, inputs=features, create_graph=True, retain_graph=True
+    )  # L x [B, K, H, W]
+    maps = []
+    # gradcam ++:
+    # Instead of channel wise average, it uses both feature maps and gradients
+    # for channel wise weights
+    for feats, grad in zip(features, grads):
+        g2 = grad.pow(2)
+        sum_a = feats.sum(dim=(2, 3))[:, :, None, None]
+        alpha = torch.where(grad != 0, g2 / (2 * g2 + sum_a * grad.pow(3)), 0)
+        weights = (alpha * F.relu(grad)).sum(dim=(2, 3))  # [B,K]
+        A = F.relu((weights[:, :, None, None] * feats).sum(dim=1))
+        maps.append(A)
+    return maps
+
+
+def compute_layercam(
+    features: list[torch.Tensor],  # L x [B, K, H, W]
+    logits: torch.Tensor,  # [B, n_classes]
+    target_classes: torch.Tensor,  # [B]
+) -> list[torch.Tensor]:  # L x [B, H, W]
+    # per-class logits: s^c for every sample
+    # for every image get just the target class logit
+    s_c = logits.gather(1, target_classes.unsqueeze(1)).squeeze(1)  # [B]
+    score = s_c.sum()
+
+    # neuron importance weights w^c_{l,k}
+    # class score gradient over activation
+    grads = torch.autograd.grad(
+        outputs=score, inputs=features, create_graph=True, retain_graph=True
+    )  # L x [B, K, H, W]
+    maps = []
+    # Layercam:
+    # 1. crops grads to > 0 before multiplying by feats
+    # 2. does not average pool, uses raw grads
+    for feats, grad in zip(features, grads):
+        A = F.relu((F.relu(grad) * feats).sum(dim=1))
         maps.append(A)
     return maps
 
@@ -74,6 +125,8 @@ HeatmapFn = Callable[
 
 HEATMAP_METHODS: dict[str, HeatmapFn] = {
     "gradcam": compute_gradcam,
+    "layercam": compute_layercam,
+    "gradcam_pp": compute_gradcam_pp,
 }
 
 
