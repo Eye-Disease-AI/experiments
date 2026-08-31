@@ -23,6 +23,7 @@ REAL_DATAMODULE_CONFIG = NuclearCataractDataModuleConfig(
     image_size=224,
     normalize=False,
     augment_rot_angle=0,
+    augment_kind="R",
 )
 
 
