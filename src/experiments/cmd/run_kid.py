@@ -17,7 +17,7 @@ def main():
     for cfg_name, augm_name in CONFIGS.items():
         fake_datamodule_config = GeneratedDataModuleConfig(
             augmentor_config=create_augmentor(augm_name),
-            n_samples=10000,
+            n_samples=3000,
         )
         cfg = KIDStudyConfig(
             study_suffix=cfg_name,
