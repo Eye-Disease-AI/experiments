@@ -83,9 +83,11 @@ def compute_gradcam_pp(
     # Instead of channel wise average, it uses both feature maps and gradients
     # for channel wise weights
     for feats, grad in zip(features, grads):
-        g2 = grad.pow(2)
         sum_a = feats.sum(dim=(2, 3))[:, :, None, None]
-        alpha = torch.where(grad != 0, g2 / (2 * g2 + sum_a * grad.pow(3)), 0)
+        #   alpha = g^2 / (2g^2 + sum_a * g^3)
+        #   = g^2 / (g^2 * (2 + sum_a * g))
+        #   = 1 / (2 + sum_a * g)
+        alpha = 1 / (2 + sum_a * grad)
         weights = (alpha * F.relu(grad)).sum(dim=(2, 3))  # [B,K]
         A = F.relu((weights[:, :, None, None] * feats).sum(dim=1))
         maps.append(A)
