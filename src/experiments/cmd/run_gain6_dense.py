@@ -21,20 +21,22 @@ def generate_studies():
     max_epochs = BaselineStudyConfig().max_epochs
     studies = []
     for warmup_epochs in range(1, 30):
-        studies.append(
-            BaselineStudyConfig(
-                experiment_name=exp_name,
-                study_suffix=f"warmup_{(warmup_epochs / max_epochs * 100):.0f}%",
-                datamodule_config=dmc(),
-                model_config=GAINConvNextConfig.from_other(
-                    BaselineStudyConfig().model_config,
-                    use_attention_mining=True,
-                    use_external_supervision=True,
-                    warmup_epochs=warmup_epochs,
-                ),
-                use_early_stopping=False,
+        for seed in [2137, 1, 2, 3, 4, 5]:
+            studies.append(
+                BaselineStudyConfig(
+                    seed=seed,
+                    experiment_name=exp_name,
+                    study_suffix=f"warmup_{(warmup_epochs / max_epochs * 100):.0f}%_seed{seed}",
+                    datamodule_config=dmc(),
+                    model_config=GAINConvNextConfig.from_other(
+                        BaselineStudyConfig().model_config,
+                        use_attention_mining=True,
+                        use_external_supervision=True,
+                        warmup_epochs=warmup_epochs,
+                    ),
+                    use_early_stopping=False,
+                )
             )
-        )
     return studies
 
 
