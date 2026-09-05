@@ -14,9 +14,9 @@ from experiments.experiment.studies.study import KFoldValidatable, SeedValidatab
 class BaselineStudyConfig(BaselineSearchStudyConfig):
     # optimised values: baseline_model_search_convnext_4160e993df7b
     model_config: ConvNextConfig = ConvNextConfig(
-        learning_rate=8.759615455801614e-05,
-        weight_decay=0.565268242196509e-08,
-        dropout=0.15595523137824943,
+        learning_rate=8.396571283771462e-05,
+        weight_decay=0.020808622843020545,
+        dropout=0.1504758475233118,
     )
     # no optuna trials, just a reproduction of the baseline
     max_trials: int = 1
