@@ -31,7 +31,7 @@ def generate_studies():
         studies.append(
             GainOptimisedStudyConfig(
                 experiment_name=exp_name,
-                study_suffix=f"ratio_{ratio}",
+                study_suffix=f"ratio_{ratio * 100:.0f}%",
                 datamodule_config=dmc(ratio),
                 model_config=GAINConvNextConfig.from_other(
                     GainOptimisedStudyConfig().model_config,

@@ -44,7 +44,7 @@ def generate_studies():
         studies.append(
             BaselineStudyConfig(
                 experiment_name=exp_name,
-                study_suffix=f"warmup_{warmup_epochs / max_epochs * 100}%",
+                study_suffix=f"warmup_{warmup_epochs / max_epochs * 100:.0f}%",
                 datamodule_config=dmc(),
                 model_config=GAINConvNextConfig.from_other(
                     BaselineStudyConfig().model_config,
