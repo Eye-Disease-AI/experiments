@@ -78,7 +78,7 @@ class NuclearCataractDataModule(DataModule):
 
     def _augment_dataset_if_needed(self, dataset):
         if (
-            (self.config.augment_kind == "RAG" or self.config.cas_mode)
+            ("G" in self.config.augment_kind or self.config.cas_mode)
             and self.config.augmentor_config
             and self.config.n_augment
         ):
@@ -120,7 +120,7 @@ class NuclearCataractDataModule(DataModule):
             )
         self.val_transform = transformsv2.Compose(val_transforms)
 
-        if self.config.augment_kind in ["RA", "RAG"]:
+        if "A" in self.config.augment_kind:
             train_transforms = [
                 transformsv2.Resize(
                     (
@@ -137,7 +137,7 @@ class NuclearCataractDataModule(DataModule):
                 train_transforms.append(
                     transformsv2.Normalize(mean=self.DATASET_MEAN, std=self.DATASET_STD)
                 )
-        # This is "R" case here
+        # This is "R" or "RG" case here
         else:
             # Copy the list
             train_transforms = list(val_transforms)

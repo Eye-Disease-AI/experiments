@@ -17,15 +17,13 @@ class DataModuleConfig(ClassConfig):
     n_augment: int | None = None
     cas_mode: bool = False
     augmentor_seed: int = 2137
-    augment_kind: Literal["R", "RA", "RAG"] = "RA"
+    augment_kind: Literal["R", "RA", "RG", "RAG"] = "RA"
 
     @override
     def post_init_checks(self):
         super().post_init_checks()
 
-        if self.augment_kind == "RAG" and not (
-            self.augmentor_config and self.n_augment
-        ):
+        if "G" in self.augment_kind and not (self.augmentor_config and self.n_augment):
             raise ValueError("RAG mode requires augmentor to be setup")
 
         if self.cas_mode and not (self.augmentor_config and self.n_augment):
