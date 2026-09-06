@@ -102,9 +102,14 @@ class StudyValidator:
         assert isinstance(study_config, StudyConfig)
         study = study_config.build()
 
-        with mlflow.start_run(run_name=validation_run_name):
+        experiment_id = self.experiment.mlflow_experiment.experiment_id
+        with mlflow.start_run(
+            run_name=validation_run_name, experiment_id=experiment_id
+        ):
             self._log_top_level(best_params, best_epoch, study)
-            with mlflow.start_run(run_name="retrain", nested=True) as retrain_run:
+            with mlflow.start_run(
+                run_name="retrain", nested=True, experiment_id=experiment_id
+            ) as retrain_run:
                 best_cb = BestSnapshotCallback(
                     study_config.optuna_metric,
                     study_config.optuna_direction,
@@ -170,7 +175,11 @@ class KFoldValidator(StudyValidator):
 
         for i in range(self.k):
             print(f"\n--- Fold {i + 1}/{self.k}")
-            with mlflow.start_run(run_name=f"fold-{i}", nested=True) as child_run:
+            with mlflow.start_run(
+                run_name=f"fold-{i}",
+                nested=True,
+                experiment_id=self.experiment.mlflow_experiment.experiment_id,
+            ) as child_run:
                 mlflow.set_tag("fold", i)
                 mlflow.set_tag("optuna_study", validation_run_name)
                 mlflow.set_tag("validation_sample", "true")
@@ -216,7 +225,11 @@ class SeedsValidator(StudyValidator):
         seeds = list(range(self.num_seeds))
         for i, s in enumerate(seeds):
             print(f"\n--- Seed {s} ({i + 1}/{len(seeds)}) ---")
-            with mlflow.start_run(run_name=f"seed-{s}", nested=True) as seed_run:
+            with mlflow.start_run(
+                run_name=f"seed-{s}",
+                nested=True,
+                experiment_id=self.experiment.mlflow_experiment.experiment_id,
+            ) as seed_run:
                 mlflow.set_tag("seed", s)
                 mlflow.set_tag("optuna_study", validation_run_name)
                 mlflow.set_tag("validation_sample", "true")
