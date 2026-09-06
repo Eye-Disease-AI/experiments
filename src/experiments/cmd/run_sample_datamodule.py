@@ -34,21 +34,18 @@ SAMPLES_DIR = ARTIFACTS_DIR / "samples"
 def generate_samples(
     datamodule: NuclearCataractDataModule,
     per_class_samples: int,
+    generation_name: str = "reals",
     seed: int = 188872,
 ):
     torch.manual_seed(seed)
 
     dest_dir = SAMPLES_DIR / datamodule.__class__.__name__
-
-    if datamodule.config.augmentor_config is not None:
-        augmentor_name = str(datamodule.config.augmentor_config.configured_class).split(
-            "."
-        )[-1]
-        dest_dir = dest_dir / augmentor_name
-    else:
-        dest_dir = dest_dir / "reals"
-
+    dest_dir = dest_dir / generation_name
     dest_dir = dest_dir / datamodule.config.augment_kind
+
+    if dest_dir.exists():
+        print(f"{dest_dir} already exists, skipping {generation_name} generation...")
+        return
 
     assert datamodule.config.cas_mode ^ (not datamodule.config.augmentor_config)
     datamodule.setup("train")
@@ -83,41 +80,57 @@ def combination(original, changes):
     return result
 
 
+def with_name(name: str, configs: list[NuclearCataractDataModuleConfig]):
+    return [(name, cfg) for cfg in configs]
+
+
 def main():
     sampled_configs = [
-        *combination(
-            NuclearCataractDataModuleConfig(),
-            [{"augment_kind": "R"}, {"augment_kind": "RA"}],
-        ),
-        *combination(
-            NuclearCataractDataModuleConfig(
-                augmentor_config=TacganAugmentorConfig.known_config_tac3(),
-                n_augment=1000,
-                cas_mode=True,  # CAS mode moves real samples away from the training set
+        *with_name(
+            "reals",
+            combination(
+                NuclearCataractDataModuleConfig(),
+                [{"augment_kind": "R"}, {"augment_kind": "RA"}],
             ),
-            [{"augment_kind": "RG"}, {"augment_kind": "RAG"}],
         ),
-        *combination(
-            NuclearCataractDataModuleConfig(
-                augmentor_config=StyleganAugmentorConfig.known_config_t(),
-                n_augment=1000,
-                cas_mode=True,  # CAS mode moves real samples away from the training set
+        *with_name(
+            "TACGAN",
+            combination(
+                NuclearCataractDataModuleConfig(
+                    augmentor_config=TacganAugmentorConfig.known_config_tac3(),
+                    n_augment=1000,
+                    cas_mode=True,  # CAS mode moves real samples away from the training set
+                ),
+                [{"augment_kind": "RG"}, {"augment_kind": "RAG"}],
             ),
-            [{"augment_kind": "RG"}, {"augment_kind": "RAG"}],
         ),
-        *combination(
-            NuclearCataractDataModuleConfig(
-                augmentor_config=StyleganAugmentorConfig.known_config_r(),
-                n_augment=1000,
-                cas_mode=True,  # CAS mode moves real samples away from the training set
+        *with_name(
+            "StyleGAN3_T",
+            combination(
+                NuclearCataractDataModuleConfig(
+                    augmentor_config=StyleganAugmentorConfig.known_config_t(),
+                    n_augment=1000,
+                    cas_mode=True,  # CAS mode moves real samples away from the training set
+                ),
+                [{"augment_kind": "RG"}, {"augment_kind": "RAG"}],
             ),
-            [{"augment_kind": "RG"}, {"augment_kind": "RAG"}],
+        ),
+        *with_name(
+            "StyleGAN3_R",
+            combination(
+                NuclearCataractDataModuleConfig(
+                    augmentor_config=StyleganAugmentorConfig.known_config_r(),
+                    n_augment=1000,
+                    cas_mode=True,  # CAS mode moves real samples away from the training set
+                ),
+                [{"augment_kind": "RG"}, {"augment_kind": "RAG"}],
+            ),
         ),
     ]
 
-    for cfg in sampled_configs:
+    for cfg_name, cfg in sampled_configs:
         nc = NuclearCataractDataModule(cfg)
-        generate_samples(nc, 16)
+        generate_samples(nc, 16, cfg_name)
 
 
 if __name__ == "__main__":
