@@ -3,7 +3,12 @@ import os
 from dataclasses import replace
 from tempfile import TemporaryDirectory
 from experiments.experiment.callbacks import BestSnapshotCallback
-from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
+from experiments.experiment.studies.study import (
+    SeedValidatable,
+    KFoldValidatable,
+    Study,
+    StudyConfig,
+)
 from experiments.lib.config_serializing import ClassConfig
 from experiments.lib.mlflow_setup import Experiment
 import mlflow
@@ -192,7 +197,6 @@ class KFoldValidator(StudyValidator):
                     fold=i,
                     num_folds=self.k,
                     best_params=best_params,
-                    best_epoch=best_epoch,
                     get_logger=study._get_logger_func(
                         child_run.info.run_id, mlflow.get_tracking_uri()
                     ),
@@ -221,6 +225,7 @@ class SeedsValidator(StudyValidator):
     def _post_retrain(
         self, best_params, best_epoch, study_config: StudyConfig, validation_run_name
     ):
+        assert isinstance(study_config, StudyConfig)
         results = []
         seeds = list(range(self.num_seeds))
         for i, s in enumerate(seeds):
@@ -234,17 +239,17 @@ class SeedsValidator(StudyValidator):
                 mlflow.set_tag("optuna_study", validation_run_name)
                 mlflow.set_tag("validation_sample", "true")
                 study_config = replace(study_config, seed=s)
-                study = study_config.build()
+                study: Study = study_config.build()
+                assert isinstance(study, SeedValidatable)
                 best_cb = BestSnapshotCallback(
                     study_config.optuna_metric, study_config.optuna_direction
                 )
 
-                _, validation_metrics = study._retrain(
+                validation_metrics = study.validate_seed(
                     get_logger=study._get_logger_func(
                         seed_run.info.run_id, mlflow.get_tracking_uri()
                     ),
                     best_params=best_params,
-                    best_epoch=best_epoch,
                     callbacks=[best_cb],
                 )
                 results.append(validation_metrics)

@@ -6,7 +6,7 @@ from experiments.experiment.studies.baseline_study import (
     BaselineStudy,
     BaselineStudyConfig,
 )
-from experiments.experiment.studies.study import KFoldValidatable
+from experiments.experiment.studies.study import KFoldValidatable, SeedValidatable
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,5 +30,5 @@ class GainOptimisedStudyConfig(BaselineStudyConfig):
         return GainOptimisedStudy
 
 
-class GainOptimisedStudy(BaselineStudy, KFoldValidatable):
+class GainOptimisedStudy(BaselineStudy, KFoldValidatable, SeedValidatable):
     pass

@@ -347,7 +347,17 @@ class KFoldValidatable(Protocol):
         fold: int,
         num_folds: int,
         best_params: dict,
-        best_epoch: int,
+        get_logger,
+        callbacks: list[L.Callback] | None = None,
+    ) -> Mapping[str, float]: ...
+
+
+@runtime_checkable
+class SeedValidatable(Protocol):
+    def validate_seed(
+        self,
+        *,
+        best_params: dict,
         get_logger,
         callbacks: list[L.Callback] | None = None,
     ) -> Mapping[str, float]: ...
