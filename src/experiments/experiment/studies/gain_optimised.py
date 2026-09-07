@@ -11,15 +11,15 @@ from experiments.experiment.studies.study import KFoldValidatable, SeedValidatab
 
 @dataclass(frozen=True, kw_only=True)
 class GainOptimisedStudyConfig(BaselineStudyConfig):
-    # optimised values: gain1_optim_val_miou_8af2d05a683a/validation
+    # optimised values: gain1_optim_val_miou_e8eb6292e31f/validation
     model_config: GAINConvNextConfig = GAINConvNextConfig(
-        learning_rate=8.759615455801614e-05,
-        weight_decay=0.565268242196509e-08,
-        dropout=0.15595523137824943,
-        am_loss_weight=0.08297327587849512,
-        es_loss_weight=6.19856154535434,
-        sigma_mask=0.988739867921397,
-        omega_mask=59.00482132043015,
+        learning_rate=8.396571283771462e-05,
+        weight_decay=0.020808622843020545,
+        dropout=0.1504758475233118,
+        am_loss_weight=2.5912372766285934,
+        es_loss_weight=9.732618849987137,
+        sigma_mask=0.9861238615442142,
+        omega_mask=199.67411980541792,
     )
     # no optuna trials, just a reproduction of the baseline
     max_trials: int = 1
