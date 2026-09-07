@@ -17,7 +17,12 @@ from experiments.experiment.callbacks import (
     BackboneFreezeCallback,
 )
 from experiments.experiment.datamodules.datamodule import DataModule, DataModuleConfig
-from experiments.experiment.studies.study import KFoldValidatable, Study, StudyConfig
+from experiments.experiment.studies.study import (
+    KFoldValidatable,
+    SeedValidatable,
+    Study,
+    StudyConfig,
+)
 from experiments.lib.config_serializing import OptunaOptimised
 from experiments.lib.reproducibility import global_seed_rng
 
@@ -56,7 +61,7 @@ class BaselineSearchStudyConfig(StudyConfig):
         return BaselineSearchStudy
 
 
-class BaselineSearchStudy(Study, KFoldValidatable):
+class BaselineSearchStudy(Study, KFoldValidatable, SeedValidatable):
     _config: BaselineSearchStudyConfig
 
     def __init__(
@@ -173,15 +178,12 @@ class BaselineSearchStudy(Study, KFoldValidatable):
         mlflow.log_metric(f"retrain_{self._config.optuna_metric}", retrain_metric)
         return trainer, validation_metrics
 
-    def validate_fold(
+    def _fit_and_validate(
         self,
-        *,
-        fold: int,
-        num_folds: int,
         best_params: dict,
-        best_epoch: int,
         get_logger,
-        callbacks: list[L.Callback] | None = None,
+        callbacks: list[L.Callback] | None,
+        fold: tuple[int, int] | None = None,
     ) -> Mapping[str, float]:
         global_seed_rng(self._config.seed)
         self._init_datamodules()
@@ -189,15 +191,38 @@ class BaselineSearchStudy(Study, KFoldValidatable):
         config = self._set_config_optuna_params(best_params)
         self._datamodule.batch_size = config.datamodule_config.batch_size
         self._datamodule.setup(stage="fit")
-        self._datamodule.setup_fold(fold, num_folds)
+        if fold is not None:
+            self._datamodule.setup_fold(*fold)
 
         model = self._bake_model_config(config).build()
         trainer = self.create_trainer(
             logger=get_logger(self._config.model_config.class_name()),
-            max_epochs=best_epoch + 1,
+            max_epochs=self._config.max_epochs,
             callbacks=([] if callbacks is None else callbacks),
         )
         global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(model, datamodule=self._datamodule)
         return validation_metrics[0]
+
+    def validate_fold(
+        self,
+        *,
+        fold: int,
+        num_folds: int,
+        best_params: dict,
+        get_logger,
+        callbacks: list[L.Callback] | None = None,
+    ) -> Mapping[str, float]:
+        return self._fit_and_validate(
+            best_params, get_logger, callbacks, fold=(fold, num_folds)
+        )
+
+    def validate_seed(
+        self,
+        *,
+        best_params: dict,  # Seed must be set when creating the study. Create new study for another seed validation
+        get_logger,
+        callbacks: list[L.Callback] | None = None,
+    ) -> Mapping[str, float]:
+        return self._fit_and_validate(best_params, get_logger, callbacks)

@@ -7,7 +7,7 @@ from experiments.experiment.studies.baseline_search_study import (
     BaselineSearchStudy,
     BaselineSearchStudyConfig,
 )
-from experiments.experiment.studies.study import KFoldValidatable
+from experiments.experiment.studies.study import KFoldValidatable, SeedValidatable
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,5 +27,5 @@ class BaselineStudyConfig(BaselineSearchStudyConfig):
         return BaselineStudy
 
 
-class BaselineStudy(BaselineSearchStudy, KFoldValidatable):
+class BaselineStudy(BaselineSearchStudy, KFoldValidatable, SeedValidatable):
     pass
