@@ -78,7 +78,8 @@ def simple_stats(dataset: Dataset, name: str):
     img_dtype = None
     img_shape = None
 
-    for img, _ in dataset:
+    for sample in dataset:
+        img = sample[0]
         img_min = min(img_min, img.min())
         img_max = max(img_max, img.max())
 
