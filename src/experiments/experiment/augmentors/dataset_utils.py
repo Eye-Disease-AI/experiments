@@ -6,11 +6,18 @@ from torch.utils.data.dataset import ConcatDataset, Dataset
 
 
 class FakeDataset(Dataset):
-    def __init__(self, images: torch.Tensor, labels: torch.Tensor, transforms=None):
+    def __init__(
+        self,
+        images: torch.Tensor,
+        labels: torch.Tensor,
+        transforms=None,
+        paths: list[str] | None = None,
+    ):
         assert images.shape[0] == labels.shape[0]
         self.images = images
         self.labels = labels
         self.transforms = transforms
+        self.paths = paths
 
     def __len__(self):
         return self.images.shape[0]
@@ -21,6 +28,9 @@ class FakeDataset(Dataset):
         if self.transforms:
             img = self.transforms(img)
 
+        if self.paths is not None:
+            return img, label, self.paths[idx]
+
         return img, label
 
 
@@ -29,7 +39,7 @@ class AugmentedDataset(ConcatDataset):
         classes_counts_dict: dict = defaultdict(lambda: 0)
         all_count = 0
 
-        for _, label in self:  # type: ignore
+        for _, label, *_ in self:  # type: ignore
             if isinstance(label, torch.Tensor):
                 label_item = label.item()
             else:

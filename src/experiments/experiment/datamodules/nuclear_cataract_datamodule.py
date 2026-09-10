@@ -10,6 +10,7 @@ from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
 
 from experiments.experiment.augmentors.augmentor import Augmentor
+from experiments.experiment.augmentors.common import augmentor_name
 from experiments.experiment.augmentors.dataset_utils import (
     AugmentedDataset,
     CASDataset,
@@ -95,10 +96,15 @@ class NuclearCataractDataModule(DataModule):
             print(
                 f"Generated fake images shape={fake_images.shape} min={fake_images.min()} max={fake_images.max()} dtype={fake_images.dtype}"
             )
+            paths = None
+            if self.config.return_paths:
+                name = augmentor_name(self.config.augmentor_config)
+                paths = [f"augm_{name}_{seed}.png" for seed in fake_seeds.tolist()]
             # We don't need transforms here, because it will be transformed by the same transforms as the real images
             fake_set = FakeDataset(
                 fake_images,
                 fake_labels,
+                paths=paths,
             )
             print(simple_stats(fake_set, "FakeDataset stats"))
             augm = AugmentedDataset([dataset, fake_set])

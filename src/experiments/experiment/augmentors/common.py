@@ -31,6 +31,24 @@ def create_augmentor(config: str) -> AugmentorConfig:
     raise RuntimeError("unknown config")
 
 
+KNOWN_AUGMENTORS = [
+    "stylegan-r",
+    "stylegan-t",
+    "tacgan-ac",
+    "tacgan-tac1",
+    "tacgan-tac2",
+    "tacgan-tac3",
+]
+
+
+def augmentor_name(config: AugmentorConfig) -> str:
+    """Name accepted by create_augmentor, or class name if config is not known"""
+    for name in KNOWN_AUGMENTORS:
+        if create_augmentor(name) == config:
+            return name
+    return config.class_name()
+
+
 def query_params_filter_string(query_params) -> str:
     param_filters = []
 
