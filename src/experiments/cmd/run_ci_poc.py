@@ -3,6 +3,7 @@ import argparse
 import mlflow
 import numpy as np
 from scipy import stats
+
 from experiments.lib.mlflow_setup import Experiment
 from experiments.lib.reproducibility import get_trial_vals
 
@@ -12,26 +13,7 @@ def calculate_ci(
 ) -> dict:
     arr = np.array(values)
     mean = np.mean(arr)
-    alpha = (1 - ci) / 2
     standard_error = stats.sem(arr)
-
-    # bootstrap simulation,
-    # It randomly draws the values of metrics with return
-    # (like how we would do with the DATA SAMPLES in a bootstrapping study)
-    # and simulates multiple validation runs that way to estimate the distribution.
-    # Not really a scientifically backed up solution, just felt like it could
-    # give some interesting results
-    if do_bootstrap_simulation:
-        if len(values) < n_bootstrap:
-            rng = np.random.default_rng(0)
-            bstrap_vals = [
-                np.mean(rng.choice(arr, size=len(arr), replace=True))
-                for _ in range(n_bootstrap)
-            ]
-        else:
-            bstrap_vals = arr
-        bstrap_ci_low = np.percentile(bstrap_vals, alpha * 100)
-        bstrap_ci_high = np.percentile(bstrap_vals, (1 - alpha) * 100)
 
     # t-student
 
@@ -49,11 +31,6 @@ def calculate_ci(
         "z_st_ci_low": z_st_ci_low,
         "z_st_ci_high": z_st_ci_high,
     }
-    if do_bootstrap_simulation:
-        out |= {
-            "bstrap_ci_low": bstrap_ci_low,
-            "bstrap_ci_high": bstrap_ci_high,
-        }
     out |= {"n": len(arr)}
     return out
 
