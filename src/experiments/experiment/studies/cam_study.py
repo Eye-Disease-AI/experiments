@@ -138,14 +138,14 @@ class CAMStudy(Study):
         model = self.build_model(model_ckpt)
 
         data_loaders = [
-            self._datamodule.train_dataloader(),
-            self._datamodule.val_dataloader(),
+            ("train", self._datamodule.train_dataloader()),
+            ("val", self._datamodule.val_dataloader()),
         ]
         logger = get_logger("cam")
 
-        for loader in data_loaders:
+        for loader_name, loader in data_loaders:
             cams = self.generate_cams(model, loader)
-            self.log_cams(logger, cams)
+            self.log_cams(loader_name, logger, cams)
 
     def ckpt_from_cache(self) -> Path:
         ckpt_path = (
@@ -222,13 +222,13 @@ class CAMStudy(Study):
 
         return result
 
-    def log_cams(self, logger: MLFlowLogger, cams):
+    def log_cams(self, log_prefix: str, logger: MLFlowLogger, cams):
         client, run_id = logger.experiment, logger.run_id
 
         with ThreadPoolExecutor(16) as pool:
             futures = []
             for path, cam in cams.items():
-                path = path.rsplit(".", 1)[0] + ".png"
+                path = f"{log_prefix}_" + path.rsplit(".", 1)[0] + ".png"
                 futures.append(pool.submit(client.log_image, run_id, cam, path))
 
             for future in as_completed(futures):
