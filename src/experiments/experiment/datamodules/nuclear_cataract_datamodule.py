@@ -49,7 +49,7 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     @override
     def get_configured_class():
         return NuclearCataractDataModule
-    
+
     @override
     def validate_config(self):
         super().validate_config()
@@ -256,20 +256,6 @@ class NuclearCataractDataModule(DataModule):
         self.train_class_weights = real_train.class_weights()
         self.train_set = self._make_train_set(train)
         self.val_set = _SubsetTransformer(val, transform=self.val_transform)
-
-    def setup_augment(self, fake_set: torch.utils.data.Dataset) -> None:
-        train_set = self.dataset.train_set()
-        train_concat = torch.utils.data.ConcatDataset([train_set, fake_set])
-        self.train_set = _SubsetTransformer(train_concat, transform=self.transform)
-        self.train_class_weights = train_set.class_weights()
-        self.is_augmented = True
-
-    def reset_augument(self):
-        if self.is_augmented:
-            train_set = self.dataset.train_set()
-            self.train_set = _SubsetTransformer(train_set, transform=self.transform)
-            self.train_class_weights = train_set.class_weights()
-            self.is_augmented = False
 
     @override
     def train_dataloader(self):
