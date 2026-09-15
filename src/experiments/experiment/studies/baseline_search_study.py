@@ -54,6 +54,7 @@ class BaselineSearchStudyConfig(StudyConfig):
     use_early_stopping: bool = False
     use_freezing: bool = True
     use_class_weights = True
+    unsafe_validate_on_test: bool = False
 
     @override
     @staticmethod
@@ -203,6 +204,10 @@ class BaselineSearchStudy(Study, KFoldValidatable, SeedValidatable):
         global_seed_rng(self._config.seed)
         trainer.fit(model, datamodule=self._datamodule)
         validation_metrics = trainer.validate(model, datamodule=self._datamodule)
+
+        if self._config.unsafe_validate_on_test:
+            trainer.test()
+
         return validation_metrics[0]
 
     def validate_fold(
