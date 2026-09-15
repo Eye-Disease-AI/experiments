@@ -79,9 +79,22 @@ class NuclearCataractDataModule(DataModule):
             self._config.image_size * (math.sin(max_rad) + math.cos(max_rad))
         )
 
+    @staticmethod
+    def bboxes(subset):
+        bboxes = []
+
+        for rest_tuple in subset:
+            if len(rest_tuple) == 3:
+                possible_bbox = rest_tuple[2]
+                if isinstance(possible_bbox, torch.Tensor):
+                    bboxes.append(possible_bbox)
+
+        return bboxes
+
     def _select_bbox_drops(self, ratio, subset) -> set[int] | None:
         n_total = len(subset)
-        box_idxs = [i for i, b in enumerate(subset.bboxes) if b.numel() > 0]
+        bboxes = self.bboxes(subset)
+        box_idxs = [i for i, b in enumerate(bboxes) if b.numel() > 0]
         n_boxes = len(box_idxs)
         target = round(ratio * n_total)
         n_drop = max(0, n_boxes - target)
@@ -93,7 +106,7 @@ class NuclearCataractDataModule(DataModule):
     @staticmethod
     def boxes_ratio(train_set: _SubsetTransformer) -> float:
         """Fraction of samples still carrying a bbox"""
-        bboxes = train_set.subset.bboxes
+        bboxes = NuclearCataractDataModule.bboxes(train_set)
         dropped = train_set.drop_bbox or set()
         have = sum(b.numel() > 0 and i not in dropped for i, b in enumerate(bboxes))
         return have / len(bboxes)
