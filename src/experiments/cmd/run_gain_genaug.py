@@ -18,6 +18,7 @@ def dmc():
         return_bboxes=True,
         augmentor_config=StyleganAugmentorConfig.known_config_r(),
         n_augment=1000,
+        augment_kind="RAG",
     )
 
 
