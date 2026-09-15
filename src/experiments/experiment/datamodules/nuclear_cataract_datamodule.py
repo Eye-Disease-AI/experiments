@@ -199,7 +199,7 @@ class NuclearCataractDataModule(DataModule):
 
     @override
     def setup(self, stage: str | None = None):
-        if not hasattr(self, "dataset"):
+        if stage in (None, "fit", "validate") and not hasattr(self, "train_set"):
             dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TrainValMode(0.8, 0.2),
                 self._cache_size(),
@@ -210,7 +210,17 @@ class NuclearCataractDataModule(DataModule):
             )
             self.dataset = CASDataset(dataset) if self._config.cas_mode else dataset
 
-        if not hasattr(self, "test_dataset"):
+            real_train = self.dataset.train_set()
+            train = self._augment_dataset_if_needed(real_train)
+            weights_from = train if self._config.cas_mode else real_train
+            self.train_class_weights = weights_from.class_weights()
+            val = self.dataset.val_set()
+
+            self.train_set = self._make_train_set(train)
+            print(simple_stats(self.train_set, "_SubsetTransformer stats"))
+            self.val_set = _SubsetTransformer(val, transform=self.val_transform)
+
+        if stage in (None, "test") and not hasattr(self, "test_set"):
             self.test_dataset = NuclearCataractDataset(
                 NuclearCataractDataset.TestMode(),
                 self._cache_size(),
@@ -221,19 +231,9 @@ class NuclearCataractDataModule(DataModule):
                     self._config.test_dataset_kind or self._config.dataset_kind
                 ),
             )
-
-        if not hasattr(self, "train_set"):
-            real_train = self.dataset.train_set()
-            train = self._augment_dataset_if_needed(real_train)
-            weights_from = train if self._config.cas_mode else real_train
-            self.train_class_weights = weights_from.class_weights()
-            val = self.dataset.val_set()
-            test = self.test_dataset.test_set()
-
-            self.train_set = self._make_train_set(train)
-            print(simple_stats(self.train_set, "_SubsetTransformer stats"))
-            self.val_set = _SubsetTransformer(val, transform=self.val_transform)
-            self.test_set = _SubsetTransformer(test, transform=self.val_transform)
+            self.test_set = _SubsetTransformer(
+                self.test_dataset.test_set(), transform=self.val_transform
+            )
 
         self.dataLoaderCommon = lambda dataset: torch.utils.data.DataLoader(
             dataset,
@@ -343,6 +343,8 @@ class _SubsetTransformer(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
+    import json
+
     import matplotlib.pyplot as plt
 
     from experiments.lib.reproducibility import global_seed_rng
@@ -357,7 +359,16 @@ if __name__ == "__main__":
         image_size=224,
         normalize=False,
         augment_rot_angle=15,
+        dataset_kind=DatasetKind.GABINET,
     )
+
+    with open(DatasetKind(c.dataset_kind).split_json_path) as f:
+        if not json.load(f)["trainvalSet"]:
+            d = c.build()
+            d.prepare_data()
+            d.setup(stage="test")
+            print(f"test set: {len(d.test_set)} samples, first={d.test_set[0][1:]}")
+            raise SystemExit
 
     print("Verifying whether providing bbox ratio works correctly")
     d1: NuclearCataractDataModule = replace(c, return_bboxes=True).build()
@@ -365,11 +376,11 @@ if __name__ == "__main__":
     d1.setup()
     max_ratio = NuclearCataractDataModule.boxes_ratio(d1.train_set)
     for p in [i / 10 for i in range(10, -1, -1)]:
-        d: NuclearCataractDataModule = replace(
+        dt: NuclearCataractDataModule = replace(
             c, return_bboxes=True, bboxes_ratio=p
         ).build()
-        d.prepare_data()
-        d.setup()
+        dt.prepare_data()
+        dt.setup()
         ratio = NuclearCataractDataModule.boxes_ratio(d.train_set)
         print(ratio)
         assert abs(ratio - p) < 0.05 or (p >= max_ratio and ratio == max_ratio)
