@@ -1,25 +1,52 @@
-from dataset.datasets import DatasetKind
+# Gain ablation
+# Test how using different GAIN components affects the results.
+# Keeping the default hyperparameter values
 
+from experiments.experiment.augmentors.stylegan_augmentor import StyleganAugmentorConfig
 from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
-from experiments.experiment.studies.baseline_study import BaselineStudyConfig
+from dataset.datasets import DatasetKind
+from experiments.experiment.models.gain_convnext import GAINConvNextConfig
+from experiments.experiment.studies.baseline_study import (
+    BaselineStudyConfig,
+)
+
+
+def dmc():
+    return NuclearCataractDataModuleConfig.from_other(
+        BaselineStudyConfig().datamodule_config,
+        return_bboxes=True,
+        augmentor_config=StyleganAugmentorConfig.known_config_r(),
+        n_augment=1000,
+        augment_kind="RAG",
+        test_dataset_kind=DatasetKind.GABINET,
+    )
+
+
+exp_name = "gain_genaug"
+studies = [
+    BaselineStudyConfig(
+        experiment_name=exp_name,
+        datamodule_config=dmc(),
+        model_config=GAINConvNextConfig.from_other(
+            BaselineStudyConfig().model_config,
+            use_attention_mining=True,
+            use_external_supervision=True,
+            target_layers=[("model", "features", 5), ("model", "features", 7)],
+            warmup_epochs=15,
+            visualization_heatmap_methods=["gradcam"],
+            loss_heatmap_method="gradcam",
+        ),
+        unsafe_validate_on_test=True,
+    ),
+]
 
 
 def main():
-    study_config = BaselineStudyConfig(
-        experiment_name="gabinet",
-        study_suffix="test1",
-        datamodule_config=NuclearCataractDataModuleConfig.from_other(
-            BaselineStudyConfig().datamodule_config,
-            test_dataset_kind=DatasetKind.GABINET,
-        ),
-        unsafe_validate_on_test=True,
-        max_epochs=5,
-    )
-
-    print("Running gabinet baseline study...")
-    study_config.build().run()
+    for study in studies:
+        study = study.build()
+        study.run()
 
 
 if __name__ == "__main__":
