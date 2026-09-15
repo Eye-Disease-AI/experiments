@@ -206,7 +206,7 @@ class BaselineSearchStudy(Study, KFoldValidatable, SeedValidatable):
         validation_metrics = trainer.validate(model, datamodule=self._datamodule)
 
         if self._config.unsafe_validate_on_test:
-            trainer.test()
+            trainer.test(model, datamodule=self._datamodule)
 
         return validation_metrics[0]
 
