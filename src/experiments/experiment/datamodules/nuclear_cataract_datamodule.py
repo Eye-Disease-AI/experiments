@@ -50,12 +50,6 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     def get_configured_class():
         return NuclearCataractDataModule
 
-    @override
-    def validate_config(self):
-        super().validate_config()
-        if self.return_bboxes and ("G" in self.augment_kind or self.cas_mode):
-            raise ValueError("return_bboxes not supported with generative augmentation")
-
 
 class NuclearCataractDataModule(DataModule):
     DATASET_STD: list[float] = [0.281245, 0.243682, 0.220464]
