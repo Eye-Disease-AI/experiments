@@ -21,7 +21,7 @@ def dmc():
     )
 
 
-exp_name = "gain_genaug_best"
+exp_name = "gain_genaug"
 studies = [
     BaselineStudyConfig(
         experiment_name=exp_name,
