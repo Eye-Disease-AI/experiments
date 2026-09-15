@@ -20,8 +20,8 @@ class DataModuleConfig(ClassConfig):
     augment_kind: Literal["R", "RA", "RG", "RAG"] = "RA"
 
     @override
-    def post_init_checks(self):
-        super().post_init_checks()
+    def validate_config(self):
+        super().validate_config()
 
         if "G" in self.augment_kind and not (self.augmentor_config and self.n_augment):
             raise ValueError("RAG mode requires augmentor to be setup")

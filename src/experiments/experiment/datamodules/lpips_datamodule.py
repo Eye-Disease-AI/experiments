@@ -17,8 +17,8 @@ class LPIPSDataModuleConfig(DataModuleConfig):
     image_size: int = 224
 
     @override
-    def post_init_checks(self):
-        super().post_init_checks()
+    def validate_config(self):
+        super().validate_config()
         if self.batch_size <= 0:
             raise ValueError("LPIPS requires batch_size > 0")
 

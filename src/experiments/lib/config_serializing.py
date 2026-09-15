@@ -1,3 +1,4 @@
+import copy
 import importlib
 import json
 from abc import ABC
@@ -33,7 +34,7 @@ class ClassConfig(ABC):
         """Friendly class name without the whole path"""
         return str(self.configured_class).split(".")[-1]
 
-    def post_init_checks(self): ...
+    def validate_config(self): ...
 
     def __post_init__(self):
         object.__setattr__(
@@ -41,7 +42,6 @@ class ClassConfig(ABC):
             "configured_class",
             serialize_class(self.get_configured_class()),
         )
-        self.post_init_checks()
 
     def to_dict(self, save_class=False):
         if is_dataclass(self):
@@ -76,7 +76,7 @@ class ClassConfig(ABC):
         return ClassConfig.flatten_dict(ClassConfig.to_dict(self))
 
     def build(self):
-        self.post_init_checks()
+        self.validate_config()
         if not self.configured_class:
             raise Exception("fConfigured class not set (={self.configured_class}).")
         return deserialize_class(self.configured_class)(self)
@@ -114,6 +114,22 @@ class ClassConfig(ABC):
         c = ClassConfig.from_dict(json.loads(s))
         assert isinstance(c, ClassConfig)
         return c
+
+    @classmethod
+    def from_other(cls, other: ClassConfig, **overrides):
+        """Create an instance of `cls` by copying field values from `other`,
+        asserting every copied field exists on `cls`."""
+        target_fields = {f.name for f in fields(cls)}
+        kwds = {}
+        for f in fields(other):
+            if f.name == "configured_class":
+                continue  # set automatically in __post_init__
+            assert f.name in target_fields, (
+                f"Field '{f.name}' from {type(other).__name__} does not exist on {cls.__name__}"
+            )
+            kwds[f.name] = copy.deepcopy(getattr(other, f.name))
+        kwds.update(overrides)
+        return cls(**kwds)
 
 
 def deserialize_class(path: str | None) -> Any:

@@ -5,6 +5,9 @@ import os
 import tempfile
 from typing import Any, Literal, Protocol, override, runtime_checkable
 import lightning as L
+import matplotlib
+
+matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 from optuna.visualization import plot_optimization_history, plot_param_importances
 import torch
@@ -39,7 +42,8 @@ class StudyConfig(ClassConfig):
     device: Literal["auto", "gpu", "cpu"] = "auto"
 
     @override
-    def post_init_checks(self):
+    def validate_config(self):
+        super().validate_config()
         if not self.experiment_name:
             raise Exception(f"experiment_name is {self.experiment_name}")
 
@@ -80,7 +84,7 @@ class Study(ABC):
             path = f"{prefix}{f.name}"
             if isinstance(value, OptunaOptimised):
                 suggest = getattr(trial, f"suggest_{value.kind}")
-                out[path] = suggest(path, **value.kwargs)
+                out[path] = suggest(name=path, **value.kwargs)
             elif is_dataclass(value):
                 assert not isinstance(value, type)
                 out.update(self._suggest_params(trial, config=value, prefix=f"{path}."))
@@ -229,7 +233,11 @@ class Study(ABC):
         global_seed_rng(self._config.seed)
         params = self._suggest_params(trial)
         self._configure_datamodules(params)
-        with mlflow.start_run(run_name=f"trial-{trial.number}", nested=True) as run:
+        with mlflow.start_run(
+            run_name=f"trial-{trial.number}",
+            nested=True,
+            experiment_id=self._mlflow_experiment_id,
+        ) as run:
             trial.set_user_attr("mlflow_run_id", run.info.run_id)
             mlflow.set_tag("optuna_study", self.name)
             mlflow.set_tag("optuna_trial", trial.number)
@@ -286,6 +294,7 @@ class Study(ABC):
     ) -> tuple[Experiment, optuna.study.Study, mlflow.ActiveRun, bool]:
         """Setup and return Optuna study with MLflow integration."""
         mlflow_experiment = Experiment(self._config.experiment_name)
+        self._mlflow_experiment_id = mlflow_experiment.mlflow_experiment.experiment_id
         actual_study_name: str = study_name or self.name
 
         optuna_study = create_study(
@@ -312,7 +321,10 @@ class Study(ABC):
         if parent_run_id:
             parent_run = mlflow.start_run(run_id=parent_run_id)
         else:
-            parent_run = mlflow.start_run(run_name=actual_study_name)
+            parent_run = mlflow.start_run(
+                run_name=actual_study_name,
+                experiment_id=self._mlflow_experiment_id,
+            )
             optuna_study.set_user_attr("mlflow_parent_run_id", parent_run.info.run_id)
             mlflow.set_tag("optuna_study", actual_study_name)
             mlflow.log_params(self._config.serialize_config())

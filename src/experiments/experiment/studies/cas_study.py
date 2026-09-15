@@ -28,8 +28,8 @@ class CASStudyConfig(BaselineStudyConfig):
     optuna_metric: str = "val_acc"
 
     @override
-    def post_init_checks(self):
-        super().post_init_checks()
+    def validate_config(self):
+        super().validate_config()
         if not self.datamodule_config.cas_mode:
             raise ValueError("CAS requires datamodule_config.cas_mode=True")
         if self.datamodule_config.augmentor_config is None:

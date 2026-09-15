@@ -16,7 +16,8 @@ class GeneratedDataModuleConfig(DataModuleConfig):
     n_classes: int = 2
 
     @override
-    def post_init_checks(self):
+    def validate_config(self):
+        super().validate_config()
         if self.augmentor_config is None:
             raise ValueError("GeneratedDataModule requires augmentor_config")
         if self.n_samples <= 0:
