@@ -147,6 +147,7 @@ class NuclearCataractDataModule(DataModule):
                 fake_images,
                 fake_labels,
                 paths=paths,
+                return_bboxes=self._config.return_bboxes,
             )
             print(simple_stats(fake_set, "FakeDataset stats"))
             augm = AugmentedDataset([dataset, fake_set])
