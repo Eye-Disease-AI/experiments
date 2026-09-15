@@ -7,14 +7,12 @@ from experiments.experiment.datamodules.nuclear_cataract_datamodule import (
     NuclearCataractDataModuleConfig,
 )
 from experiments.experiment.models.gain_convnext import GAINConvNextConfig
-from experiments.experiment.studies.baseline_study import (
-    BaselineStudyConfig,
-)
+from experiments.experiment.studies.gain_optimised import GainOptimisedStudyConfig
 
 
 def dmc():
     return NuclearCataractDataModuleConfig.from_other(
-        BaselineStudyConfig().datamodule_config,
+        GainOptimisedStudyConfig().datamodule_config,
         return_bboxes=True,
         augmentor_config=StyleganAugmentorConfig.known_config_r(),
         n_augment=1000,
@@ -24,11 +22,11 @@ def dmc():
 
 exp_name = "gain_genaug"
 studies = [
-    BaselineStudyConfig(
+    GainOptimisedStudyConfig(
         experiment_name=exp_name,
         datamodule_config=dmc(),
         model_config=GAINConvNextConfig.from_other(
-            BaselineStudyConfig().model_config,
+            GainOptimisedStudyConfig().model_config,
             use_attention_mining=True,
             use_external_supervision=True,
             target_layers=[("model", "features", 5), ("model", "features", 7)],
