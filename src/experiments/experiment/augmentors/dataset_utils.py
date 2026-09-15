@@ -12,12 +12,14 @@ class FakeDataset(Dataset):
         labels: torch.Tensor,
         transforms=None,
         paths: list[str] | None = None,
+        return_bboxes: bool = False,
     ):
         assert images.shape[0] == labels.shape[0]
         self.images = images
         self.labels = labels
         self.transforms = transforms
         self.paths = paths
+        self.return_bboxes = return_bboxes
 
     def __len__(self):
         return self.images.shape[0]
@@ -28,10 +30,15 @@ class FakeDataset(Dataset):
         if self.transforms:
             img = self.transforms(img)
 
-        if self.paths is not None:
-            return img, label, self.paths[idx]
+        sample = [img, label]
 
-        return img, label
+        if self.paths is not None:
+            sample.append(self.paths[idx])
+
+        if self.return_bboxes:
+            sample.append(torch.zeros((1, 4)))
+
+        return sample
 
 
 class AugmentedDataset(ConcatDataset):
@@ -77,6 +84,7 @@ class CASDataset:
             samples,
             self.dataset.label_to_idx,
             self.dataset.return_paths,
+            self.dataset.return_bboxes,
             self.dataset.cache_size is not None,
             self.dataset.cache_size,
         )
