@@ -50,42 +50,29 @@ class BaseClassifierModel(L.LightningModule):
         self.loss_fn = deserialize_class(self.config.loss_fn)(self.config.class_weights)
         self.optimizer = deserialize_class(self.config.optimizer)
         self.scheduler = deserialize_class(self.config.scheduler)
-        self.val_metrics = MetricCollection(
-            {
-                "val_precision": MulticlassPrecision(
-                    num_classes=self.config.n_classes, average="macro"
-                ),
-                "val_recall": MulticlassRecall(
-                    num_classes=self.config.n_classes, average="macro"
-                ),
-                "val_auroc": MulticlassAUROC(
-                    num_classes=self.config.n_classes, average="macro"
-                ),
-                "val_f1": MulticlassF1Score(
-                    num_classes=self.config.n_classes, average="macro"
-                ),
-            }
-        )
-        self.val_metrics_per_class = MetricCollection(
-            {
-                "val_precision": MulticlassPrecision(
-                    num_classes=self.config.n_classes, average=None
-                ),
-                "val_recall": MulticlassRecall(
-                    num_classes=self.config.n_classes, average=None
-                ),
-                "val_auroc": MulticlassAUROC(
-                    num_classes=self.config.n_classes, average=None
-                ),
-                "val_f1": MulticlassF1Score(
-                    num_classes=self.config.n_classes, average=None
-                ),
-            }
-        )
+        self.val_metrics = self._build_metrics("val", "macro")
+        self.val_metrics_per_class = self._build_metrics("val", None)
+        self.test_metrics = self._build_metrics("test", "macro")
+        self.test_metrics_per_class = self._build_metrics("test", None)
         self._val_probs: list[torch.Tensor] = []
         self._val_targets: list[torch.Tensor] = []
+        self._test_probs: list[torch.Tensor] = []
+        self._test_targets: list[torch.Tensor] = []
         self._last_all_probs = None
         self._last_all_targets = None
+
+    def _build_metrics(self, prefix: str, average: str | None) -> MetricCollection:
+        n = self.config.n_classes
+        return MetricCollection(
+            {
+                f"{prefix}_precision": MulticlassPrecision(
+                    num_classes=n, average=average
+                ),
+                f"{prefix}_recall": MulticlassRecall(num_classes=n, average=average),
+                f"{prefix}_auroc": MulticlassAUROC(num_classes=n, average=average),
+                f"{prefix}_f1": MulticlassF1Score(num_classes=n, average=average),
+            }
+        )
 
     def training_step(self, batch, batch_idx):
         x, y, *_ = batch
@@ -102,6 +89,36 @@ class BaseClassifierModel(L.LightningModule):
         self.log_dict({"val_loss": loss, "val_acc": acc}, prog_bar=True)
         self._val_probs.append(probs.detach().cpu())
         self._val_targets.append(y.detach().cpu())
+
+    def test_step(self, batch, batch_idx):
+        x, y, *_ = batch
+        logits = self(x)
+        loss = self.loss_fn(logits, y)
+        probs = torch.softmax(logits, dim=1)
+        acc = (probs.argmax(dim=1) == y).float().mean()
+        self.log_dict({"test_loss": loss, "test_acc": acc}, prog_bar=True)
+        self._test_probs.append(probs.detach().cpu())
+        self._test_targets.append(y.detach().cpu())
+
+    def on_test_epoch_end(self):
+        all_probs = torch.cat(self._test_probs).to(self.device)
+        all_targets = torch.cat(self._test_targets).to(self.device)
+        self._test_probs.clear()
+        self._test_targets.clear()
+
+        self.log_dict(self.test_metrics(all_probs, all_targets), prog_bar=True)
+        self.test_metrics.reset()
+
+        per_class = self.test_metrics_per_class(all_probs, all_targets)
+        self.log_dict(
+            {
+                f"{name}_class_{i}": v[i]
+                for name, v in per_class.items()
+                for i in range(self.config.n_classes)
+            },
+            prog_bar=False,
+        )
+        self.test_metrics_per_class.reset()
 
     def on_validation_epoch_end(self):
         all_probs = torch.cat(self._val_probs).to(self.device)  # [N, n_classes]

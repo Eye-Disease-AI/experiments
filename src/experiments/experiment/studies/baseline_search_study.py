@@ -177,6 +177,10 @@ class BaselineSearchStudy(Study, KFoldValidatable, SeedValidatable):
         validation_metrics = trainer.validate(best_model, datamodule=self._datamodule)
         retrain_metric = validation_metrics[0][self._config.optuna_metric]
         mlflow.log_metric(f"retrain_{self._config.optuna_metric}", retrain_metric)
+
+        if self._config.unsafe_validate_on_test:
+            trainer.test(best_model, datamodule=self._datamodule)
+
         return trainer, validation_metrics
 
     def _fit_and_validate(

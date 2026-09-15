@@ -5,6 +5,7 @@ from typing import override
 
 import numpy as np
 import torch
+from dataset.datasets import DatasetKind, DatasetKindType
 from dataset.hard_policy import HardPolicyType
 from dataset.loader import HardPolicy, NuclearCataractDataset
 from torchvision.transforms import v2 as transformsv2
@@ -44,6 +45,9 @@ class NuclearCataractDataModuleConfig(DataModuleConfig):
     augment_rot_angle: float = 15
     return_bboxes: bool = False
     bboxes_ratio: float = 1.0
+    dataset_kind: DatasetKindType = DatasetKind.NUCLEAR_CATARACT
+    # Defaults to dataset_kind, set it to test on a dataset other than the trained one
+    test_dataset_kind: DatasetKindType | None = None
 
     @staticmethod
     @override
@@ -202,6 +206,7 @@ class NuclearCataractDataModule(DataModule):
                 self._config.return_paths,
                 self._config.return_bboxes,
                 hard_policy=self._config.hard_policy,
+                dataset_kind=DatasetKind(self._config.dataset_kind),
             )
             self.dataset = CASDataset(dataset) if self._config.cas_mode else dataset
 
@@ -212,6 +217,9 @@ class NuclearCataractDataModule(DataModule):
                 self._config.return_paths,
                 self._config.return_bboxes,
                 hard_policy=self._config.hard_policy,
+                dataset_kind=DatasetKind(
+                    self._config.test_dataset_kind or self._config.dataset_kind
+                ),
             )
 
         if not hasattr(self, "train_set"):
@@ -257,6 +265,7 @@ class NuclearCataractDataModule(DataModule):
             self._config.return_paths,
             self._config.return_bboxes,
             hard_policy=self._config.hard_policy,
+            dataset_kind=DatasetKind(self._config.dataset_kind),
         )
         real_train = self.dataset.fold_train_set(fold)
         train = self._augment_dataset_if_needed(real_train)
