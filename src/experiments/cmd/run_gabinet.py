@@ -19,7 +19,7 @@ def dmc():
     )
 
 
-exp_name = "gain_genaug_gabinet"
+exp_name = "gain_genaug_gabinet_trial1"
 studies = [
     GainOptimisedStudyConfig(
         experiment_name=exp_name,
